@@ -879,7 +879,9 @@ export default function Dashboard() {
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', display: 'flex', alignItems: 'center', gap: 24, height: 52 }}>
           <span style={{ color: '#fff', fontWeight: 500, fontSize: 15 }}>Rock Roofing</span>
-          <span style={{ color: '#555', fontSize: 13 }}>Sales Dashboard</span>
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: '#2a2a28' }}>Sales Dashboard</span>
+          <span style={{ color: '#444' }}>|</span>
+          <a href="/scorecard" style={{ color: '#888', fontSize: 13, textDecoration: 'none', padding: '4px 10px', borderRadius: 6 }}>Scorecards</a>
           <div style={{ flex: 1 }} />
           {lastSync && <span style={{ color: '#555', fontSize: 12 }}>Last sync: {shortDate(lastSync)}</span>}
           <button onClick={doSync} disabled={syncing} style={{ fontSize: 12, padding: '5px 12px', border: '0.5px solid #444', borderRadius: 6, background: 'transparent', color: '#ccc', cursor: 'pointer', fontFamily: 'inherit' }}>{syncing ? 'Syncing…' : 'Sync now'}</button>
