@@ -376,41 +376,64 @@ export default function Dashboard() {
     },
 
     'Tenders Received': () => {
-      const filtered = applyFilters(filterDealsByDate(deals, 'receivedDate'))
+      const base = deals.filter(d => d.everInReceived)
+      const filtered = applyFilters(base.filter(d => {
+        if (!d.receivedDate) return false
+        if (dateFrom && d.receivedDate < dateFrom) return false
+        if (dateTo && d.receivedDate > dateTo) return false
+        return true
+      }))
       const existing = filtered.filter(d => d.customerType === 'Existing').length
-      const newC = filtered.filter(d => d.customerType !== 'Existing').length
-      const monthData = last12.map(m => ({
+      const prospects = filtered.filter(d => d.customerType !== 'Existing').length
+
+      function getMonthsBetweenTR(fromStr, toStr) {
+        const months = []
+        const [fy, fm] = fromStr.split('-').map(Number)
+        const [ty, tm] = toStr.split('-').map(Number)
+        let y = fy, m = fm
+        while (y < ty || (y === ty && m <= tm)) {
+          months.push(`${y}-${String(m).padStart(2,'0')}`)
+          m++
+          if (m > 12) { m = 1; y++ }
+        }
+        return months
+      }
+      const displayMonths = dateFrom && dateTo
+        ? getMonthsBetweenTR(dateFrom.substring(0,7), dateTo.substring(0,7))
+        : last12
+
+      const monthData = displayMonths.map(m => ({
         month: monthLabel(m),
         count: filtered.filter(d => monthKey(d.receivedDate) === m).length
       }))
       const pivotRows = [
-        { group: 'Existing', ...Object.fromEntries(last12.map(m => [m, filtered.filter(d => d.customerType === 'Existing' && monthKey(d.receivedDate) === m).length])), total: existing },
-        { group: 'New', ...Object.fromEntries(last12.map(m => [m, filtered.filter(d => d.customerType !== 'Existing' && monthKey(d.receivedDate) === m).length])), total: newC },
-        { group: 'Total', ...Object.fromEntries(last12.map(m => [m, filtered.filter(d => monthKey(d.receivedDate) === m).length])), total: filtered.length },
+        { group: 'Existing', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Existing' && monthKey(d.receivedDate) === m).length])), total: existing },
+        { group: 'Prospect', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType !== 'Existing' && monthKey(d.receivedDate) === m).length])), total: prospects },
+        { group: 'Total', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => monthKey(d.receivedDate) === m).length])), total: filtered.length },
       ]
       return (
         <div>
-          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows tenders received by date entered in the Received stage</p>
+          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows any tender that has ever sat in the Received stage, by the first date it entered Received. Captured via webhook from 29 Jun 2026 — historical data prior to this date is not available.</p>
           {filterBar}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Tenders received', filtered.length)}
             {statCard('Existing customers', existing)}
-            {statCard('New customers', newC)}
+            {statCard('Prospects', prospects)}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-            <div>
+            <div style={{ overflowX: 'auto' }}>
               <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Summary</div>
-              <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: 600 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead><tr style={{ borderBottom: '1px solid #e1e0d9' }}>
                     <th style={thS}>Customer type</th>
-                    {last12.map(m => <th key={m} style={{ ...thS, textAlign: 'right' }}>{monthLabel(m)}</th>)}
+                    {displayMonths.map(m => <th key={m} style={{ ...thS, textAlign: 'right' }}>{monthLabel(m)}</th>)}
                     <th style={{ ...thS, textAlign: 'right' }}>Total</th>
                   </tr></thead>
                   <tbody>{pivotRows.map(r => (
                     <tr key={r.group} style={{ borderBottom: '0.5px solid #f0efec', fontWeight: r.group === 'Total' ? 600 : 400 }}>
                       <td style={tdS}>{r.group}</td>
-                      {last12.map(m => <td key={m} style={{ ...tdS, textAlign: 'right' }}>{r[m] || '—'}</td>)}
+                      {displayMonths.map(m => <td key={m} style={{ ...tdS, textAlign: 'right' }}>{r[m] || '—'}</td>)}
                       <td style={{ ...tdS, textAlign: 'right', fontWeight: 600 }}>{r.total}</td>
                     </tr>
                   ))}</tbody>
@@ -425,16 +448,19 @@ export default function Dashboard() {
           <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Detail</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['Title','Organisation','Sales person','Estimator','Received','Status','Stage','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
-              <tbody>{filtered.map(d => (
+              <thead><tr>{['Title','Organisation','Sales person','Estimator','Received date','Customer type','Status','Stage','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
+              <tbody>{filtered.length === 0
+                ? <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>No data yet — will populate as deals enter Received stage from 29 Jun 2026</td></tr>
+                : filtered.map(d => (
                 <tr key={d.id} style={{ background: d.status === 'won' ? '#f0fdf4' : d.status === 'lost' ? '#fef2f2' : '#fff' }}>
                   <td style={tdS}>{d.title}</td>
                   <td style={tdS}>{d.organizationName}</td>
                   <td style={tdS}>{d.salesPerson}</td>
                   <td style={tdS}>{d.estimator || '—'}</td>
-                  <td style={tdS}>{shortDate(d.receivedDate)}</td>
+                  <td style={tdS}>{d.receivedDate || '—'}</td>
+                  <td style={tdS}>{d.customerType || '—'}</td>
                   <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status] || '#888') + '22', color: STATUS_COLORS[d.status] || '#888' }}>{d.status}</span></td>
-                  <td style={tdS}>{d.projectStage}</td>
+                  <td style={tdS}>{d.projectStage || '—'}</td>
                   <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
                 </tr>
               ))}</tbody>
