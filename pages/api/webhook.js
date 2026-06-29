@@ -1,43 +1,54 @@
-import { getValueChanges, saveValueChanges, getCachedDeals, saveCachedDeals, set } from '../../lib/db'
+import { getValueChanges, saveValueChanges, getCachedDeals, saveCachedDeals, get, set } from '../../lib/db'
 
 const TRACKED_STAGES = ['MC Unsecured', 'MC Secured', 'Negotiating', 'Variations']
-
-function generateId(dealId, timestamp, type) {
-  return `${type}-${dealId}-${timestamp}`
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    // Save raw payload for debugging
-    await set('webhook:last_payload', JSON.stringify(req.body))
+    const body = req.body
+    const meta = body.meta || {}
+    const current = body.current || {}
+    const previous = body.previous || {}
 
-    const event = req.body
+    // Save compact debug info
+    await set('webhook_last_debug', JSON.stringify({
+      action: meta.action,
+      entity: meta.entity,
+      entity_id: meta.entity_id,
+      current_keys: Object.keys(current),
+      previous_keys: Object.keys(previous),
+      current_value: current.value,
+      previous_value: previous.value,
+      current_stage_id: current.stage_id,
+      previous_stage_id: previous.stage_id,
+      ts: new Date().toISOString()
+    }))
 
-    // Pipedrive sends data in different structures - handle both
-    const current = event.current || event.data
-    const previous = event.previous || event.meta?.previous
+    if (meta.entity !== 'deal') return res.status(200).json({ ok: true, reason: 'not a deal' })
 
-    if (!current) return res.status(200).json({ ok: true, reason: 'no current data' })
-
-    const dealId = String(current.id)
-    const dealTitle = current.title || ''
-    const organizationName = current.org_name || current.org_id?.name || ''
-    const estimator = current.estimator_responsible || ''
-    const currentStage = current.stage_name || current.stage_id || ''
-    const previousStage = previous?.stage_name || previous?.stage_id || ''
-    const currentValue = parseFloat(current.value) || 0
-    const previousValue = parseFloat(previous?.value) ?? null
+    const dealId = String(meta.entity_id)
     const now = new Date().toISOString()
     const changeDate = now.split('T')[0]
+
+    // Get deal details from current object
+    const dealTitle = current.title || ''
+    const organizationName = current.org_name || ''
+    const currentStage = current.stage_name || ''
+    const previousStage = previous.stage_name || ''
+    const currentValue = parseFloat(current.value) ?? 0
+    const previousValue = previous.value != null ? parseFloat(previous.value) : null
+
+    // Try to get estimator from cached deals
+    const deals = await getCachedDeals() || []
+    const cachedDeal = deals.find(d => String(d.id) === dealId)
+    const estimator = cachedDeal?.estimator || ''
 
     const changes = await getValueChanges()
     const newEntries = []
 
     // 1. VALUE CHANGE — any deal, any stage
     if (previousValue !== null && currentValue !== previousValue) {
-      const id = generateId(dealId, Date.now(), 'vc')
       const alreadyLogged = changes.some(c =>
         c.dealId === dealId &&
         c.oldValue === previousValue &&
@@ -46,18 +57,18 @@ export default async function handler(req, res) {
       )
       if (!alreadyLogged) {
         newEntries.push({
-          id,
+          id: `vc-${dealId}-${Date.now()}`,
           type: 'value_change',
           dealId,
-          dealTitle,
-          organizationName,
+          dealTitle: dealTitle || cachedDeal?.title || '',
+          organizationName: organizationName || cachedDeal?.organizationName || '',
           estimator,
           oldValue: previousValue,
           newValue: currentValue,
           valueChange: currentValue - previousValue,
           changeDate,
-          stage: currentStage,
-          notes: `Value change via Pipedrive`,
+          stage: currentStage || cachedDeal?.stageName || '',
+          notes: 'Value change via Pipedrive',
           createdAt: now,
           source: 'webhook'
         })
@@ -65,13 +76,12 @@ export default async function handler(req, res) {
     }
 
     // 2. STAGE CHANGE
-    if (previousStage && currentStage !== previousStage) {
+    if (previousStage && currentStage && currentStage !== previousStage) {
       const hasEverBeenInTrackedStage = changes.some(c => c.dealId === dealId) ||
         TRACKED_STAGES.includes(previousStage) ||
         TRACKED_STAGES.includes(currentStage)
 
       if (hasEverBeenInTrackedStage) {
-        const id = generateId(dealId, Date.now() + 1, 'sc')
         const alreadyLogged = changes.some(c =>
           c.dealId === dealId &&
           c.type === 'stage_change' &&
@@ -79,14 +89,13 @@ export default async function handler(req, res) {
           c.toStage === currentStage &&
           c.changeDate === changeDate
         )
-
         if (!alreadyLogged) {
           newEntries.push({
-            id,
+            id: `sc-${dealId}-${Date.now()}`,
             type: 'stage_change',
             dealId,
-            dealTitle,
-            organizationName,
+            dealTitle: dealTitle || cachedDeal?.title || '',
+            organizationName: organizationName || cachedDeal?.organizationName || '',
             estimator,
             fromStage: previousStage,
             toStage: currentStage,
@@ -99,21 +108,20 @@ export default async function handler(req, res) {
           })
         }
 
-        // 3. ENTERING A TRACKED STAGE
+        // Entering a tracked stage
         if (TRACKED_STAGES.includes(currentStage) && !TRACKED_STAGES.includes(previousStage)) {
           const lastValueEntry = changes
             .filter(c => c.dealId === dealId && c.type === 'value_change')
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
-
           const lastLoggedValue = lastValueEntry?.newValue
 
           if (!currentValue || currentValue === 0) {
             newEntries.push({
-              id: generateId(dealId, Date.now() + 2, 'se'),
+              id: `se-${dealId}-${Date.now() + 1}`,
               type: 'stage_entry',
               dealId,
-              dealTitle,
-              organizationName,
+              dealTitle: dealTitle || cachedDeal?.title || '',
+              organizationName: organizationName || cachedDeal?.organizationName || '',
               estimator,
               oldValue: null,
               newValue: 0,
@@ -127,11 +135,11 @@ export default async function handler(req, res) {
             })
           } else if (currentValue !== lastLoggedValue) {
             newEntries.push({
-              id: generateId(dealId, Date.now() + 2, 'se'),
+              id: `se-${dealId}-${Date.now() + 1}`,
               type: 'stage_entry',
               dealId,
-              dealTitle,
-              organizationName,
+              dealTitle: dealTitle || cachedDeal?.title || '',
+              organizationName: organizationName || cachedDeal?.organizationName || '',
               estimator,
               oldValue: lastLoggedValue || 0,
               newValue: currentValue,
@@ -149,15 +157,13 @@ export default async function handler(req, res) {
 
     if (newEntries.length > 0) {
       await saveValueChanges([...changes, ...newEntries])
-    }
-
-    // Update cached deal
-    if (previousValue !== null && currentValue !== previousValue) {
-      const deals = await getCachedDeals() || []
-      const updated = deals.map(d =>
-        String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage } : d
-      )
-      await saveCachedDeals(updated)
+      // Update cached deal value
+      if (previousValue !== null && currentValue !== previousValue) {
+        const updated = deals.map(d =>
+          String(d.id) === dealId ? { ...d, value: currentValue } : d
+        )
+        await saveCachedDeals(updated)
+      }
     }
 
     return res.status(200).json({ ok: true, logged: newEntries.length })
