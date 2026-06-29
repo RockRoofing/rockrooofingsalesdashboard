@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     const current = body.current || {}
     const previous = body.previous || {}
 
-    if (meta.entity !== 'deal') return res.status(200).json({ ok: true, reason: 'not a deal' })
+    console.log('Webhook data:', JSON.stringify({ entity_id: meta.entity_id, current_value: current.value, previous_value: previous.value, current_stage: current.stage_id, previous_stage: previous.stage_id }))
 
     const dealId = String(meta.entity_id)
     const now = new Date().toISOString()
