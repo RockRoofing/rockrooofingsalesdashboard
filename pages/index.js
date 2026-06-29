@@ -74,6 +74,8 @@ export default function Dashboard() {
   const [savingVc, setSavingVc] = useState(false)
   const [drCustName, setDrCustName] = useState('All')
   const [drSalesPerson, setDrSalesPerson] = useState('All')
+  const [ppStages, setPpStages] = useState([])
+  const [ppFilters, setPpFilters] = useState({ customerType: 'All', estimator: 'All', salesPerson: 'All', status: 'All', leadSource: 'All', region: 'All', custName: 'All', systemPriced: 'All' })
 
   // Persist page in URL
   useEffect(() => {
@@ -471,13 +473,29 @@ export default function Dashboard() {
     },
 
     'Projects Priced': () => {
+      // Apply filters to value changes via their linked deals
       const vcFiltered = valueChanges.filter(v => {
         if (!v.changeDate) return false
         if (dateFrom && v.changeDate < dateFrom) return false
         if (dateTo && v.changeDate > dateTo) return false
+        // Apply deal-level filters
+        const deal = deals.find(d => String(d.id) === v.dealId)
+        if (ppFilters.customerType !== 'All' && deal?.customerType !== ppFilters.customerType) return false
+        if (ppFilters.estimator !== 'All' && deal?.estimator !== ppFilters.estimator) return false
+        if (ppFilters.salesPerson !== 'All' && deal?.salesPerson !== ppFilters.salesPerson) return false
+        if (ppFilters.status !== 'All' && deal?.status !== ppFilters.status) return false
+        if (ppFilters.leadSource !== 'All' && !deal?.leadSource?.includes(ppFilters.leadSource)) return false
+        if (ppFilters.region !== 'All' && deal?.region !== ppFilters.region) return false
+        if (ppFilters.custName !== 'All' && deal?.organizationName !== ppFilters.custName) return false
+        if (ppFilters.systemPriced !== 'All' && !deal?.systemPriced?.includes(ppFilters.systemPriced)) return false
+        if (ppStages.length > 0 && !ppStages.includes(deal?.projectStage)) return false
         return true
       })
-      const zeroValueDeals = deals.filter(d => d.status === 'open' && TRACKED_STAGES.includes(d.projectStage) && (!d.value || d.value === 0))
+      const zeroValueDeals = deals.filter(d => d.status === 'open' && TRACKED_STAGES.includes(d.projectStage) && (!d.value || d.value === 0) &&
+        (ppStages.length === 0 || ppStages.includes(d.projectStage)) &&
+        (ppFilters.estimator === 'All' || d.estimator === ppFilters.estimator) &&
+        (ppFilters.region === 'All' || d.region === ppFilters.region)
+      )
       const totalValueChange = vcFiltered.reduce((s, v) => s + (v.valueChange || 0), 0)
       const uniqueDealsWithChanges = new Set(vcFiltered.map(v => v.dealId)).size
       const newlyPriced = vcFiltered.filter(v => !v.oldValue || v.oldValue === 0).length
@@ -496,16 +514,46 @@ export default function Dashboard() {
       return (
         <div>
           <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows value changes to priced deals by date of change</p>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {[
+                { label: 'Customer type', key: 'customerType', opts: ['All', ...new Set(deals.map(d => d.customerType).filter(Boolean))].sort() },
+                { label: 'Estimator', key: 'estimator', opts: ['All', ...new Set(deals.map(d => d.estimator).filter(Boolean))].sort() },
+                { label: 'Sales person', key: 'salesPerson', opts: ['All', ...new Set(deals.map(d => d.salesPerson).filter(Boolean))].sort() },
+                { label: 'Status', key: 'status', opts: ['All','won','lost','open'] },
+                { label: 'Lead source', key: 'leadSource', opts: ['All', ...new Set(deals.map(d => d.leadSource).filter(Boolean))].sort() },
+                { label: 'Region', key: 'region', opts: ['All', ...new Set(deals.map(d => d.region).filter(Boolean))].sort() },
+                { label: 'Customer name', key: 'custName', opts: ['All', ...new Set(deals.map(d => d.organizationName).filter(Boolean))].sort() },
+                { label: 'System priced', key: 'systemPriced', opts: ['All', ...new Set(deals.map(d => d.systemPriced).filter(Boolean).flatMap(v => v.split(',').map(s => s.trim())))].sort() },
+              ].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>{f.label}</label>
+                  <select value={ppFilters[f.key]} onChange={e => setPpFilters(p => ({...p, [f.key]: e.target.value}))} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
+                    {f.opts.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+              ))}
             </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Project stage (multi-select)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {['MC Unsecured','MC Secured','Negotiating','Variations','Review','MC Unsecured - Not Priced'].map(s => (
+                    <button key={s} onClick={() => setPpStages(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} style={{ fontSize: 11, padding: '3px 8px', border: '0.5px solid #d0d0cc', borderRadius: 4, background: ppStages.includes(s) ? '#1a1a19' : '#fff', color: ppStages.includes(s) ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+              </div>
+              <button onClick={() => { setPpFilters({ customerType:'All', estimator:'All', salesPerson:'All', status:'All', leadSource:'All', region:'All', custName:'All', systemPriced:'All' }); setPpStages([]) }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+              <button onClick={() => setShowValueForm(true)} style={{ fontSize: 13, padding: '6px 14px', border: 'none', borderRadius: 6, background: '#1a1a19', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>+ Log value change</button>
             </div>
-            <button onClick={() => setShowValueForm(true)} style={{ fontSize: 13, padding: '6px 14px', border: 'none', borderRadius: 6, background: '#1a1a19', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>+ Log value change</button>
           </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
