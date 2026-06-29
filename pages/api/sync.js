@@ -1,14 +1,13 @@
-import { getCachedDeals, getLastSync, saveFieldMap, saveCachedDeals, saveLastSync, getFieldMap } from '../../lib/db'
+import { saveCachedDeals, saveLastSync, saveFieldMap } from '../../lib/db'
 import { fetchAllDeals, discoverFieldMap } from '../../lib/pipedrive'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
   try {
-    let fieldMap = await getFieldMap()
-    if (!fieldMap || req.body?.refreshFields) {
-      fieldMap = await discoverFieldMap()
-      await saveFieldMap(fieldMap)
-    }
+    // Always refresh fields on every sync
+    const fieldMap = await discoverFieldMap()
+    await saveFieldMap(fieldMap)
+
     const deals = await fetchAllDeals(fieldMap)
     await saveCachedDeals(deals)
     await saveLastSync(new Date().toISOString())
