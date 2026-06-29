@@ -24,13 +24,18 @@ function getLastMonthRange() {
   }
 }
 
-// Get last 12 months keys
+// Get last 12 months keys including current month
 function getLast12Months() {
   const months = []
   const now = new Date()
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     months.push(d.toISOString().substring(0, 7))
+  }
+  // Ensure current month is included
+  const currentMonth = now.toISOString().substring(0, 7)
+  if (!months.includes(currentMonth)) {
+    months.push(currentMonth)
   }
   return months
 }
@@ -58,10 +63,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [filters, setFilters] = useState({ customerType: 'All', estimator: 'All', projectStage: 'All', salesPerson: 'All', leadSource: 'All', variation: 'All', status: 'All', region: 'All' })
-  const now = new Date()
-  const twelveMonthsAgo = new Date(now.getFullYear()-1, now.getMonth(), now.getDate())
-  const [dateFrom, setDateFrom] = useState(twelveMonthsAgo.toISOString().split('T')[0])
-  const [dateTo, setDateTo] = useState(now.toISOString().split('T')[0])
+  const _now = new Date()
+  const _twelveMonthsAgo = new Date(_now.getFullYear()-1, _now.getMonth(), _now.getDate())
+  const _today = _now.toISOString().split('T')[0]
+  const _yearAgo = _twelveMonthsAgo.toISOString().split('T')[0]
+  const [dateFrom, setDateFrom] = useState(_yearAgo)
+  const [dateTo, setDateTo] = useState(_today)
   const [showValueForm, setShowValueForm] = useState(false)
   const [vcForm, setVcForm] = useState({ dealId: '', dealTitle: '', organizationName: '', oldValue: '', newValue: '', changeDate: new Date().toISOString().split('T')[0], estimator: '', notes: '' })
   const [savingVc, setSavingVc] = useState(false)
@@ -190,7 +197,7 @@ export default function Dashboard() {
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); const y = new Date(); const f = new Date(y.getFullYear()-1, y.getMonth(), y.getDate()); setDateFrom(f.toISOString().split('T')[0]); setDateTo(y.toISOString().split('T')[0]); setDrCustName('All'); setDrSalesPerson('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); const _r = new Date(); const _rf = new Date(_r.getFullYear()-1, _r.getMonth(), _r.getDate()); setDateFrom(_rf.toISOString().split('T')[0]); setDateTo(_r.toISOString().split('T')[0]); setDrCustName('All'); setDrSalesPerson('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
       </div>
     </div>
   )
