@@ -63,6 +63,8 @@ export default function Dashboard() {
   const [showValueForm, setShowValueForm] = useState(false)
   const [vcForm, setVcForm] = useState({ dealId: '', dealTitle: '', organizationName: '', oldValue: '', newValue: '', changeDate: new Date().toISOString().split('T')[0], estimator: '', notes: '' })
   const [savingVc, setSavingVc] = useState(false)
+  const [drCustName, setDrCustName] = useState('All')
+  const [drSalesPerson, setDrSalesPerson] = useState('All')
 
   // Persist page in URL
   useEffect(() => {
@@ -252,8 +254,6 @@ export default function Dashboard() {
     'Deals Researched': () => {
       // Only deals that have ever been in 1st Contact, filtered by firstContactDate
       const base = deals.filter(d => d.everIn1stContact)
-      const [drCustName, setDrCustName] = useState('All')
-      const [drSalesPerson, setDrSalesPerson] = useState('All')
       
       const filtered = applyFilters(base.filter(d => {
         if (!d.firstContactDate) return false
