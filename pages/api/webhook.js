@@ -187,21 +187,26 @@ export default async function handler(req, res) {
           String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage, ...firstContactUpdate } : d
         )
         await saveCachedDeals(updated)
-      } else if (Object.keys(firstContactUpdate).length > 0) {
+      } else {
         // New deal not in cache yet — add a basic entry so firstContactDate is preserved
+        console.log('Adding new deal to cache:', dealId, 'firstContactUpdate:', JSON.stringify(firstContactUpdate), 'deal:', deal?.id)
         const newDealEntry = {
           id: parseInt(dealId),
-          title: dealTitle,
-          organizationName,
+          title: dealTitle || deal?.title || '',
+          organizationName: organizationName || deal?.org_name || '',
           value: currentValue,
           status: deal?.status || 'open',
           createdDate: deal?.add_time || now,
-          stageName: currentStage,
+          stageName: currentStage || '',
           estimator,
+          customerType: null,
+          leadSource: null,
+          region: null,
+          over200k: currentValue >= 200000,
           ...firstContactUpdate,
         }
         await saveCachedDeals([...deals, newDealEntry])
-        console.log('New deal added to cache:', dealId)
+        console.log('New deal added to cache successfully:', dealId)
       }
     }
 
