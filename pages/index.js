@@ -327,9 +327,9 @@ export default function Dashboard() {
             {statCard('Prospects', prospects)}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-            <div>
+            <div style={{ overflowX: 'auto' }}>
               <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Summary</div>
-              <div style={{ overflowX: 'auto', maxHeight: 300 }}>
+              <div style={{ minWidth: 600 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead><tr style={{ borderBottom: '1px solid #e1e0d9', position: 'sticky', top: 0, background: '#fff' }}>
                     <th style={thS}>Customer type</th>
