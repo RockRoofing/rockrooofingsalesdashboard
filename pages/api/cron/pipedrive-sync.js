@@ -1,4 +1,4 @@
-import { saveCachedDeals, saveLastSync, saveFieldMap } from '../../../lib/db'
+import { saveCachedDeals, saveLastSync, saveFieldMap, getCachedDeals } from '../../../lib/db'
 import { fetchAllDeals, discoverFieldMap } from '../../../lib/pipedrive'
 
 export default async function handler(req, res) {
@@ -9,11 +9,24 @@ export default async function handler(req, res) {
   if (!isVercelCron && !isManual) return res.status(401).json({ error: 'Unauthorized' })
 
   try {
-    // Always refresh field map first so new estimators, regions etc. appear automatically
     const fieldMap = await discoverFieldMap()
     await saveFieldMap(fieldMap)
 
-    const deals = await fetchAllDeals(fieldMap)
+    const freshDeals = await fetchAllDeals(fieldMap)
+    
+    // Preserve webhook-set fields
+    const existingDeals = await getCachedDeals() || []
+    const existingMap = new Map(existingDeals.map(d => [String(d.id), d]))
+    
+    const deals = freshDeals.map(d => {
+      const existing = existingMap.get(String(d.id))
+      return {
+        ...d,
+        firstContactDate: existing?.firstContactDate || d.firstContactDate || null,
+        everIn1stContact: existing?.everIn1stContact || d.everIn1stContact || false,
+      }
+    })
+
     await saveCachedDeals(deals)
     await saveLastSync(new Date().toISOString())
 
