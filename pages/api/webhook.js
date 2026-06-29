@@ -165,11 +165,22 @@ export default async function handler(req, res) {
       }
     }
 
-    if (newEntries.length > 0) {
-      await saveValueChanges([...changes, ...newEntries])
-      // Update cached deal value
+    // Check if deal just entered 1st Contact for the first time
+    const FIRST_CONTACT_STAGE_ID = 45
+    let firstContactUpdate = {}
+    if (currentStageId === FIRST_CONTACT_STAGE_ID && previousStageId !== FIRST_CONTACT_STAGE_ID) {
+      const existingDeal = deals.find(d => String(d.id) === dealId)
+      if (!existingDeal?.firstContactDate) {
+        firstContactUpdate = { firstContactDate: changeDate, everIn1stContact: true }
+        console.log('First contact date set for deal', dealId, changeDate)
+      }
+    }
+
+    if (newEntries.length > 0 || Object.keys(firstContactUpdate).length > 0) {
+      if (newEntries.length > 0) await saveValueChanges([...changes, ...newEntries])
+      // Update cached deal
       const updated = deals.map(d =>
-        String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage } : d
+        String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage, ...firstContactUpdate } : d
       )
       await saveCachedDeals(updated)
     }
