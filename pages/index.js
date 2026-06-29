@@ -288,14 +288,21 @@ export default function Dashboard() {
       const existing = filtered.filter(d => d.customerType === 'Existing').length
       const prospects = filtered.filter(d => d.customerType !== 'Existing').length
 
-      // Build months from date range (not just last 12)
-      const allMonths = [...new Set(base.filter(d => d.firstContactDate).map(d => monthKey(d.firstContactDate)))].sort()
-      const rangeMonths = allMonths.filter(m => {
-        if (dateFrom && m < dateFrom.substring(0,7)) return false
-        if (dateTo && m > dateTo.substring(0,7)) return false
-        return true
-      })
-      const displayMonths = rangeMonths.length > 0 ? rangeMonths : last12
+      // Build months from the date filter range directly
+      function getMonthsBetween(from, to) {
+        const months = []
+        const start = new Date(from + '-01')
+        const end = new Date(to + '-01')
+        const current = new Date(start)
+        while (current <= end) {
+          months.push(current.toISOString().substring(0, 7))
+          current.setMonth(current.getMonth() + 1)
+        }
+        return months
+      }
+      const displayMonths = dateFrom && dateTo 
+        ? getMonthsBetween(dateFrom.substring(0,7), dateTo.substring(0,7))
+        : last12
 
       const monthData = displayMonths.map(m => ({
         month: monthLabel(m),
