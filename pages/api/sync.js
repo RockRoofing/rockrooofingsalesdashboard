@@ -21,6 +21,8 @@ export default async function handler(req, res) {
         // Preserve firstContactDate set by webhook
         firstContactDate: existing?.firstContactDate || d.firstContactDate || null,
         everIn1stContact: existing?.everIn1stContact || d.everIn1stContact || false,
+        receivedDate: existing?.receivedDate || d.receivedDate || null,
+        everInReceived: existing?.everInReceived || d.everInReceived || false,
       }
     })
     
