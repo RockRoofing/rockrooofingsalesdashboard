@@ -1,4 +1,4 @@
-import { getValueChanges, saveValueChanges, getCachedDeals, saveCachedDeals } from '../../lib/db'
+import { getValueChanges, saveValueChanges, getCachedDeals, saveCachedDeals, set } from '../../lib/db'
 
 const TRACKED_STAGES = ['MC Unsecured', 'MC Secured', 'Negotiating', 'Variations']
 
@@ -10,20 +10,25 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    const event = req.body
-    const current = event.current
-    const previous = event.previous
+    // Save raw payload for debugging
+    await set('webhook:last_payload', JSON.stringify(req.body))
 
-    if (!current) return res.status(200).json({ ok: true })
+    const event = req.body
+
+    // Pipedrive sends data in different structures - handle both
+    const current = event.current || event.data
+    const previous = event.previous || event.meta?.previous
+
+    if (!current) return res.status(200).json({ ok: true, reason: 'no current data' })
 
     const dealId = String(current.id)
     const dealTitle = current.title || ''
     const organizationName = current.org_name || current.org_id?.name || ''
     const estimator = current.estimator_responsible || ''
-    const currentStage = current.stage_name || ''
-    const previousStage = previous?.stage_name || ''
+    const currentStage = current.stage_name || current.stage_id || ''
+    const previousStage = previous?.stage_name || previous?.stage_id || ''
     const currentValue = parseFloat(current.value) || 0
-    const previousValue = parseFloat(previous?.value) || 0
+    const previousValue = parseFloat(previous?.value) ?? null
     const now = new Date().toISOString()
     const changeDate = now.split('T')[0]
 
@@ -31,12 +36,11 @@ export default async function handler(req, res) {
     const newEntries = []
 
     // 1. VALUE CHANGE — any deal, any stage
-    if (previous && currentValue !== previousValue) {
+    if (previousValue !== null && currentValue !== previousValue) {
       const id = generateId(dealId, Date.now(), 'vc')
-      // Check not already logged (dedup)
-      const alreadyLogged = changes.some(c => 
-        c.dealId === dealId && 
-        c.oldValue === previousValue && 
+      const alreadyLogged = changes.some(c =>
+        c.dealId === dealId &&
+        c.oldValue === previousValue &&
         c.newValue === currentValue &&
         c.changeDate === changeDate
       )
@@ -60,8 +64,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. STAGE CHANGE — track full journey once deal has touched a tracked stage
-    if (previous && currentStage !== previousStage) {
+    // 2. STAGE CHANGE
+    if (previousStage && currentStage !== previousStage) {
       const hasEverBeenInTrackedStage = changes.some(c => c.dealId === dealId) ||
         TRACKED_STAGES.includes(previousStage) ||
         TRACKED_STAGES.includes(currentStage)
@@ -95,20 +99,17 @@ export default async function handler(req, res) {
           })
         }
 
-        // 3. ENTERING A TRACKED STAGE — log opening value or flag warning
+        // 3. ENTERING A TRACKED STAGE
         if (TRACKED_STAGES.includes(currentStage) && !TRACKED_STAGES.includes(previousStage)) {
-          // Check if we already have this value logged for this deal
-          const lastValueEntry = [...changes, ...newEntries]
+          const lastValueEntry = changes
             .filter(c => c.dealId === dealId && c.type === 'value_change')
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
 
           const lastLoggedValue = lastValueEntry?.newValue
 
-          if (currentValue === 0 || currentValue == null) {
-            // No value — flag as warning (stage_entry with no value)
-            const id = generateId(dealId, Date.now() + 2, 'se')
+          if (!currentValue || currentValue === 0) {
             newEntries.push({
-              id,
+              id: generateId(dealId, Date.now() + 2, 'se'),
               type: 'stage_entry',
               dealId,
               dealTitle,
@@ -125,10 +126,8 @@ export default async function handler(req, res) {
               source: 'webhook'
             })
           } else if (currentValue !== lastLoggedValue) {
-            // Has value and it's different from last logged — log opening entry
-            const id = generateId(dealId, Date.now() + 2, 'se')
             newEntries.push({
-              id,
+              id: generateId(dealId, Date.now() + 2, 'se'),
               type: 'stage_entry',
               dealId,
               dealTitle,
@@ -152,10 +151,10 @@ export default async function handler(req, res) {
       await saveValueChanges([...changes, ...newEntries])
     }
 
-    // Update cached deal value if changed
-    if (previous && currentValue !== previousValue) {
+    // Update cached deal
+    if (previousValue !== null && currentValue !== previousValue) {
       const deals = await getCachedDeals() || []
-      const updated = deals.map(d => 
+      const updated = deals.map(d =>
         String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage } : d
       )
       await saveCachedDeals(updated)
