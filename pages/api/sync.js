@@ -1,4 +1,4 @@
-import { saveCachedDeals, saveLastSync, saveFieldMap } from '../../lib/db'
+import { saveCachedDeals, saveLastSync, saveFieldMap, getCachedDeals } from '../../lib/db'
 import { fetchAllDeals, discoverFieldMap } from '../../lib/pipedrive'
 
 export default async function handler(req, res) {
@@ -8,7 +8,22 @@ export default async function handler(req, res) {
     const fieldMap = await discoverFieldMap()
     await saveFieldMap(fieldMap)
 
-    const deals = await fetchAllDeals(fieldMap)
+    const freshDeals = await fetchAllDeals(fieldMap)
+    
+    // Preserve webhook-set fields that aren't available in bulk API
+    const existingDeals = await getCachedDeals() || []
+    const existingMap = new Map(existingDeals.map(d => [String(d.id), d]))
+    
+    const deals = freshDeals.map(d => {
+      const existing = existingMap.get(String(d.id))
+      return {
+        ...d,
+        // Preserve firstContactDate set by webhook
+        firstContactDate: existing?.firstContactDate || d.firstContactDate || null,
+        everIn1stContact: existing?.everIn1stContact || d.everIn1stContact || false,
+      }
+    })
+    
     await saveCachedDeals(deals)
     await saveLastSync(new Date().toISOString())
     return res.status(200).json({ success: true, dealCount: deals.length })
