@@ -165,17 +165,26 @@ export default async function handler(req, res) {
       }
     }
 
-    // Check if deal is in 1st Contact (either created there or moved there)
     const FIRST_CONTACT_STAGE_ID = 45
+    const RECEIVED_STAGE_ID = 47
     let firstContactUpdate = {}
     const existingDeal = deals.find(d => String(d.id) === dealId)
     const isNewDeal = meta.action === 'added'
+
+    // Check 1st Contact
     const movedIntoFirstContact = currentStageId === FIRST_CONTACT_STAGE_ID && previousStageId !== FIRST_CONTACT_STAGE_ID
     const createdInFirstContact = isNewDeal && currentStageId === FIRST_CONTACT_STAGE_ID
-    
     if ((movedIntoFirstContact || createdInFirstContact) && !existingDeal?.firstContactDate) {
-      firstContactUpdate = { firstContactDate: changeDate, everIn1stContact: true }
+      firstContactUpdate = { ...firstContactUpdate, firstContactDate: changeDate, everIn1stContact: true }
       console.log('First contact date set for deal', dealId, changeDate, isNewDeal ? '(created)' : '(moved)')
+    }
+
+    // Check Received stage
+    const movedIntoReceived = currentStageId === RECEIVED_STAGE_ID && previousStageId !== RECEIVED_STAGE_ID
+    const createdInReceived = isNewDeal && currentStageId === RECEIVED_STAGE_ID
+    if ((movedIntoReceived || createdInReceived) && !existingDeal?.receivedDate) {
+      firstContactUpdate = { ...firstContactUpdate, receivedDate: changeDate, everInReceived: true }
+      console.log('Received date set for deal', dealId, changeDate, isNewDeal ? '(created)' : '(moved)')
     }
 
     if (newEntries.length > 0 || Object.keys(firstContactUpdate).length > 0 || !existingDeal) {
