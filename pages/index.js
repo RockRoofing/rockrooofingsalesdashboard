@@ -289,14 +289,16 @@ export default function Dashboard() {
       const prospects = filtered.filter(d => d.customerType !== 'Existing').length
 
       // Build months from the date filter range directly
-      function getMonthsBetween(from, to) {
+      function getMonthsBetween(fromStr, toStr) {
         const months = []
-        const start = new Date(from + '-01')
-        const end = new Date(to + '-01')
-        const current = new Date(start)
-        while (current <= end) {
-          months.push(current.toISOString().substring(0, 7))
-          current.setMonth(current.getMonth() + 1)
+        // fromStr and toStr are already YYYY-MM format
+        const [fy, fm] = fromStr.split('-').map(Number)
+        const [ty, tm] = toStr.split('-').map(Number)
+        let y = fy, m = fm
+        while (y < ty || (y === ty && m <= tm)) {
+          months.push(`${y}-${String(m).padStart(2,'0')}`)
+          m++
+          if (m > 12) { m = 1; y++ }
         }
         return months
       }
