@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     current_id: body.current?.id,
   }
   
-  await set('webhook:last_debug', JSON.stringify(debug))
+  await set('webhook_last_debug', JSON.stringify(debug))
   return res.status(200).json({ ok: true })
 }
  
