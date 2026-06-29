@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [filters, setFilters] = useState({ customerType: 'All', estimator: 'All', projectStage: 'All', salesPerson: 'All', leadSource: 'All', variation: 'All', status: 'All', region: 'All' })
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  // No default date filter — show all deals on load
   const [showValueForm, setShowValueForm] = useState(false)
   const [vcForm, setVcForm] = useState({ dealId: '', dealTitle: '', organizationName: '', oldValue: '', newValue: '', changeDate: new Date().toISOString().split('T')[0], estimator: '', notes: '' })
   const [dealSearch, setDealSearch] = useState('')
@@ -68,9 +69,10 @@ export default function Dashboard() {
 
   // Filter helpers
   const filterDealsByDate = (arr, dateField) => {
+    if (!dateFrom && !dateTo) return arr
     return arr.filter(d => {
       const v = d[dateField]
-      if (!v) return false
+      if (!v) return true
       if (dateFrom && v < dateFrom) return false
       if (dateTo && v > dateTo + 'T99') return false
       return true
