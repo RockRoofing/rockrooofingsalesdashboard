@@ -76,6 +76,7 @@ export default function Dashboard() {
   const [drSalesPerson, setDrSalesPerson] = useState('All')
   const [ppStages, setPpStages] = useState([])
   const [ppFilters, setPpFilters] = useState({ customerType: 'All', estimator: 'All', salesPerson: 'All', status: 'All', leadSource: 'All', region: 'All', custName: 'All', systemPriced: 'All' })
+  const [trLabelFilter, setTrLabelFilter] = useState('All') // 'All', 'gte5', 'lt5'
 
   // Persist page in URL
   useEffect(() => {
@@ -383,6 +384,9 @@ export default function Dashboard() {
         if (!d.receivedDate) return false
         if (dateFrom && d.receivedDate < dateFrom) return false
         if (dateTo && d.receivedDate > dateTo) return false
+        const score = parseInt(d.label)
+        if (trLabelFilter === 'gte5' && (isNaN(score) || score < 5)) return false
+        if (trLabelFilter === 'lt5' && (!isNaN(score) && score >= 5)) return false
         return true
       }))
       const existing = filtered.filter(d => d.customerType === 'Existing').length
@@ -417,6 +421,12 @@ export default function Dashboard() {
         <div>
           <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows any tender that has ever sat in the Received stage, by the first date it entered Received. Captured via webhook from 29 Jun 2026 — historical data prior to this date is not available.</p>
           {filterBar}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#888' }}>Project score:</span>
+            {[['All','All'],['gte5','≥ 5'],['lt5','< 5']].map(([val, label]) => (
+              <button key={val} onClick={() => setTrLabelFilter(val)} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: trLabelFilter === val ? '#1a1a19' : '#fff', color: trLabelFilter === val ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Tenders received', filtered.length)}
             {statCard('Existing customers', existing)}
@@ -450,9 +460,9 @@ export default function Dashboard() {
           <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Detail</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['Title','Organisation','Sales person','Estimator','Received date','Customer type','Status','Stage','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
+              <thead><tr>{['Title','Organisation','Sales person','Estimator','Received date','Customer type','Score','Status','Stage','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
               <tbody>{filtered.length === 0
-                ? <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>No data yet — will populate as deals enter Received stage from 29 Jun 2026</td></tr>
+                ? <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>No data yet — will populate as deals enter Received stage from 29 Jun 2026</td></tr>
                 : filtered.map(d => (
                 <tr key={d.id} style={{ background: d.status === 'won' ? '#f0fdf4' : d.status === 'lost' ? '#fef2f2' : '#fff' }}>
                   <td style={tdS}>{d.title}</td>
@@ -461,6 +471,9 @@ export default function Dashboard() {
                   <td style={tdS}>{d.estimator || '—'}</td>
                   <td style={tdS}>{d.receivedDate || '—'}</td>
                   <td style={tdS}>{d.customerType || '—'}</td>
+                  <td style={{ ...tdS, textAlign: 'center' }}>
+                    {d.label != null ? <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: parseInt(d.label) >= 5 ? '#16a34a22' : '#e6394622', color: parseInt(d.label) >= 5 ? '#16a34a' : '#e63946' }}>{d.label}</span> : '—'}
+                  </td>
                   <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status] || '#888') + '22', color: STATUS_COLORS[d.status] || '#888' }}>{d.status}</span></td>
                   <td style={tdS}>{d.projectStage || '—'}</td>
                   <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
@@ -516,16 +529,22 @@ export default function Dashboard() {
           <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows value changes to priced deals by date of change</p>
           <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-              {[
-                { label: 'Customer type', key: 'customerType', opts: ['All', ...new Set(deals.map(d => d.customerType).filter(Boolean))].sort() },
-                { label: 'Estimator', key: 'estimator', opts: ['All', ...new Set(deals.map(d => d.estimator).filter(Boolean))].sort() },
-                { label: 'Sales person', key: 'salesPerson', opts: ['All', ...new Set(deals.map(d => d.salesPerson).filter(Boolean))].sort() },
-                { label: 'Status', key: 'status', opts: ['All','won','lost','open'] },
-                { label: 'Lead source', key: 'leadSource', opts: ['All', ...new Set(deals.map(d => d.leadSource).filter(Boolean))].sort() },
-                { label: 'Region', key: 'region', opts: ['All', ...new Set(deals.map(d => d.region).filter(Boolean))].sort() },
-                { label: 'Customer name', key: 'custName', opts: ['All', ...new Set(deals.map(d => d.organizationName).filter(Boolean))].sort() },
-                { label: 'System priced', key: 'systemPriced', opts: ['All', ...new Set(deals.map(d => d.systemPriced).filter(Boolean).flatMap(v => v.split(',').map(s => s.trim())))].sort() },
-              ].map(f => (
+              {(() => {
+                // Only show filter options from deals that have value change entries
+                const vcDealIds = new Set(valueChanges.map(v => v.dealId))
+                const vcDeals = deals.filter(d => vcDealIds.has(String(d.id)))
+                const ppFilterOpts = [
+                  { label: 'Customer type', key: 'customerType', opts: ['All', ...new Set(vcDeals.map(d => d.customerType).filter(Boolean))].sort() },
+                  { label: 'Estimator', key: 'estimator', opts: ['All', ...new Set(vcDeals.map(d => d.estimator).filter(Boolean))].sort() },
+                  { label: 'Sales person', key: 'salesPerson', opts: ['All', ...new Set(vcDeals.map(d => d.salesPerson).filter(Boolean))].sort() },
+                  { label: 'Status', key: 'status', opts: ['All','won','lost','open'] },
+                  { label: 'Lead source', key: 'leadSource', opts: ['All', ...new Set(vcDeals.map(d => d.leadSource).filter(Boolean))].sort() },
+                  { label: 'Region', key: 'region', opts: ['All', ...new Set(vcDeals.map(d => d.region).filter(Boolean))].sort() },
+                  { label: 'Customer name', key: 'custName', opts: ['All', ...new Set(vcDeals.map(d => d.organizationName).filter(Boolean))].sort() },
+                  { label: 'System priced', key: 'systemPriced', opts: ['All', ...new Set(vcDeals.map(d => d.systemPriced).filter(Boolean).flatMap(v => v.split(',').map(s => s.trim())))].sort() },
+                ]
+                return ppFilterOpts
+              })().map(f => (
                 <div key={f.key}>
                   <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>{f.label}</label>
                   <select value={ppFilters[f.key]} onChange={e => setPpFilters(p => ({...p, [f.key]: e.target.value}))} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
