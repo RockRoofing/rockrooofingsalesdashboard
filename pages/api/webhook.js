@@ -178,13 +178,31 @@ export default async function handler(req, res) {
       console.log('First contact date set for deal', dealId, changeDate, isNewDeal ? '(created)' : '(moved)')
     }
 
-    if (newEntries.length > 0 || Object.keys(firstContactUpdate).length > 0) {
+    if (newEntries.length > 0 || Object.keys(firstContactUpdate).length > 0 || !existingDeal) {
       if (newEntries.length > 0) await saveValueChanges([...changes, ...newEntries])
-      // Update cached deal
-      const updated = deals.map(d =>
-        String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage, ...firstContactUpdate } : d
-      )
-      await saveCachedDeals(updated)
+      
+      if (existingDeal) {
+        // Update existing cached deal
+        const updated = deals.map(d =>
+          String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage, ...firstContactUpdate } : d
+        )
+        await saveCachedDeals(updated)
+      } else if (Object.keys(firstContactUpdate).length > 0) {
+        // New deal not in cache yet — add a basic entry so firstContactDate is preserved
+        const newDealEntry = {
+          id: parseInt(dealId),
+          title: dealTitle,
+          organizationName,
+          value: currentValue,
+          status: deal?.status || 'open',
+          createdDate: deal?.add_time || now,
+          stageName: currentStage,
+          estimator,
+          ...firstContactUpdate,
+        }
+        await saveCachedDeals([...deals, newDealEntry])
+        console.log('New deal added to cache:', dealId)
+      }
     }
 
     return res.status(200).json({ ok: true, logged: newEntries.length })
