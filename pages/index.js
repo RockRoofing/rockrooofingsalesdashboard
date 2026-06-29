@@ -193,7 +193,15 @@ export default function Dashboard() {
           </select>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Project score</label>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[['All','All'],['gte5','≥ 5'],['lt5','< 5']].map(([val, lbl]) => (
+              <button key={val} onClick={() => setTrLabelFilter(val)} style={{ fontSize: 12, padding: '4px 8px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: trLabelFilter === val ? '#1a1a19' : '#fff', color: trLabelFilter === val ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{lbl}</button>
+            ))}
+          </div>
+        </div>
         <div>
           <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
@@ -202,7 +210,7 @@ export default function Dashboard() {
           <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
         </div>
-        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); const _r = new Date(); const _rf = new Date(_r.getFullYear()-1, _r.getMonth(), _r.getDate()); setDateFrom(_rf.toISOString().split('T')[0]); setDateTo(_r.toISOString().split('T')[0]); setDrCustName('All'); setDrSalesPerson('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); const _r = new Date(); const _rf = new Date(_r.getFullYear()-1, _r.getMonth(), _r.getDate()); setDateFrom(_rf.toISOString().split('T')[0]); setDateTo(_r.toISOString().split('T')[0]); setDrCustName('All'); setDrSalesPerson('All'); setTrLabelFilter('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
       </div>
     </div>
   )
@@ -421,12 +429,6 @@ export default function Dashboard() {
         <div>
           <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows any tender that has ever sat in the Received stage, by the first date it entered Received. Captured via webhook from 29 Jun 2026 — historical data prior to this date is not available.</p>
           {filterBar}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: '#888' }}>Project score:</span>
-            {[['All','All'],['gte5','≥ 5'],['lt5','< 5']].map(([val, label]) => (
-              <button key={val} onClick={() => setTrLabelFilter(val)} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: trLabelFilter === val ? '#1a1a19' : '#fff', color: trLabelFilter === val ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
-            ))}
-          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Tenders received', filtered.length)}
             {statCard('Existing customers', existing)}
