@@ -301,7 +301,12 @@ export default function Dashboard() {
 
       return (
         <div>
-          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows deals that have ever sat in 1st Contact stage, by the date they first entered 1st Contact. Variations are excluded.</p>
+          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows deals by the date they first entered 1st Contact. Data is captured in real time via webhook — historical data will not show here. Variations are excluded.</p>
+          {deals.filter(d => d.everIn1stContact).length === 0 && (
+            <div style={{ background: '#f0f9ff', border: '0.5px solid #bae6fd', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#0369a1' }}>
+              ℹ No data yet — this page will populate as deals move through 1st Contact stage in Pipedrive. The webhook is active and capturing from today.
+            </div>
+          )}
           {filterBar}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Total deals', filtered.length)}
