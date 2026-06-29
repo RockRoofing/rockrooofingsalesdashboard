@@ -153,7 +153,7 @@ export default function Dashboard() {
   const filterBar = (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
       {[
-        { label: 'Customer', key: 'customerType', opts: uniq(deals, 'customerType') },
+        { label: 'Customer type', key: 'customerType', opts: uniq(deals, 'customerType') },
         { label: 'Estimator', key: 'estimator', opts: uniq(deals, 'estimator') },
         { label: 'Stage', key: 'projectStage', opts: uniq(deals, 'projectStage') },
         { label: 'Status', key: 'status', opts: ['All','won','lost','open'] },
@@ -168,6 +168,18 @@ export default function Dashboard() {
         </div>
       ))}
       <div>
+        <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Customer name</label>
+        <select value={drCustName} onChange={e => setDrCustName(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit', maxWidth: 160 }}>
+          {['All', ...new Set(deals.map(d => d.organizationName).filter(Boolean))].sort().map(o => <option key={o}>{o}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Sales person</label>
+        <select value={drSalesPerson} onChange={e => setDrSalesPerson(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
+          {['All', ...new Set(deals.map(d => d.salesPerson).filter(Boolean))].sort().map(o => <option key={o}>{o}</option>)}
+        </select>
+      </div>
+      <div>
         <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
       </div>
@@ -176,7 +188,7 @@ export default function Dashboard() {
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); setDateFrom(lastMonth.from); setDateTo(lastMonth.to) }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); setDateFrom(lastMonth.from); setDateTo(lastMonth.to); setDrCustName('All'); setDrSalesPerson('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
       </div>
     </div>
   )
@@ -287,27 +299,10 @@ export default function Dashboard() {
         { group: 'Total', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => monthKey(d.firstContactDate) === m).length])), total: filtered.length },
       ]
 
-      const custNames = ['All', ...new Set(base.map(d => d.organizationName).filter(Boolean))].sort()
-      const salesPeople = ['All', ...new Set(base.map(d => d.salesPerson).filter(Boolean))].sort()
-
       return (
         <div>
           <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows deals that have ever sat in 1st Contact stage, by the date they first entered 1st Contact. Variations are excluded.</p>
           {filterBar}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-            <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Customer name</label>
-              <select value={drCustName} onChange={e => setDrCustName(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit', maxWidth: 200 }}>
-                {custNames.map(o => <option key={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Sales person</label>
-              <select value={drSalesPerson} onChange={e => setDrSalesPerson(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
-                {salesPeople.map(o => <option key={o}>{o}</option>)}
-              </select>
-            </div>
-          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Total deals', filtered.length)}
             {statCard('Existing customers', existing)}
@@ -348,7 +343,7 @@ export default function Dashboard() {
                   <td style={tdS}>{d.organizationName}</td>
                   <td style={tdS}>{d.salesPerson}</td>
                   <td style={tdS}>{d.estimator || '—'}</td>
-                  <td style={tdS}>{d.firstContactDate || '—'}</td>
+                  <td style={tdS}>{d.firstContactDate ? <span>{d.firstContactDate}{d.firstContactApproximate ? <span title="Approximate — based on created date" style={{color:'#aaa',fontSize:10,marginLeft:4}}>~</span> : ''}</span> : '—'}</td>
                   <td style={tdS}>{d.customerType || '—'}</td>
                   <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status] || '#888') + '22', color: STATUS_COLORS[d.status] || '#888' }}>{d.status}</span></td>
                   <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
