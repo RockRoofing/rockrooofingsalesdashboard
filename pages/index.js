@@ -250,41 +250,83 @@ export default function Dashboard() {
   const pages = {
 
     'Deals Researched': () => {
-      const filtered = applyFilters(filterDealsByDate(deals.filter(d => d.projectStage === 'Project In' || d.projectStage === '1st Contact' || true), 'createdDate'))
-      const existing = filtered.filter(d => d.customerType === 'Existing').length
-      const newC = filtered.filter(d => d.customerType === 'New' || !d.customerType).length
-      const monthData = last12.map(m => ({
-        month: monthLabel(m),
-        count: filtered.filter(d => monthKey(d.createdDate) === m).length
+      // Only deals that have ever been in 1st Contact, filtered by firstContactDate
+      const base = deals.filter(d => d.everIn1stContact)
+      const [drCustName, setDrCustName] = useState('All')
+      const [drSalesPerson, setDrSalesPerson] = useState('All')
+      
+      const filtered = applyFilters(base.filter(d => {
+        if (!d.firstContactDate) return false
+        if (dateFrom && d.firstContactDate < dateFrom) return false
+        if (dateTo && d.firstContactDate > dateTo) return false
+        if (drCustName !== 'All' && d.organizationName !== drCustName) return false
+        if (drSalesPerson !== 'All' && d.salesPerson !== drSalesPerson) return false
+        return true
       }))
+
+      const existing = filtered.filter(d => d.customerType === 'Existing').length
+      const prospects = filtered.filter(d => d.customerType !== 'Existing').length
+
+      // Build months from date range (not just last 12)
+      const allMonths = [...new Set(base.filter(d => d.firstContactDate).map(d => monthKey(d.firstContactDate)))].sort()
+      const rangeMonths = allMonths.filter(m => {
+        if (dateFrom && m < dateFrom.substring(0,7)) return false
+        if (dateTo && m > dateTo.substring(0,7)) return false
+        return true
+      })
+      const displayMonths = rangeMonths.length > 0 ? rangeMonths : last12
+
+      const monthData = displayMonths.map(m => ({
+        month: monthLabel(m),
+        count: filtered.filter(d => monthKey(d.firstContactDate) === m).length
+      }))
+
       const pivotRows = [
-        { group: 'Existing', ...Object.fromEntries(last12.map(m => [m, filtered.filter(d => d.customerType === 'Existing' && monthKey(d.createdDate) === m).length])), total: existing },
-        { group: 'New', ...Object.fromEntries(last12.map(m => [m, filtered.filter(d => d.customerType !== 'Existing' && monthKey(d.createdDate) === m).length])), total: newC },
-        { group: 'Total', ...Object.fromEntries(last12.map(m => [m, filtered.filter(d => monthKey(d.createdDate) === m).length])), total: filtered.length },
+        { group: 'Existing', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Existing' && monthKey(d.firstContactDate) === m).length])), total: existing },
+        { group: 'Prospect', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType !== 'Existing' && monthKey(d.firstContactDate) === m).length])), total: prospects },
+        { group: 'Total', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => monthKey(d.firstContactDate) === m).length])), total: filtered.length },
       ]
+
+      const custNames = ['All', ...new Set(base.map(d => d.organizationName).filter(Boolean))].sort()
+      const salesPeople = ['All', ...new Set(base.map(d => d.salesPerson).filter(Boolean))].sort()
+
       return (
         <div>
-          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows deals added to Pipedrive by the date created</p>
+          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows deals that have ever sat in 1st Contact stage, by the date they first entered 1st Contact. Variations are excluded.</p>
           {filterBar}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Customer name</label>
+              <select value={drCustName} onChange={e => setDrCustName(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit', maxWidth: 200 }}>
+                {custNames.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Sales person</label>
+              <select value={drSalesPerson} onChange={e => setDrSalesPerson(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
+                {salesPeople.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Total deals', filtered.length)}
             {statCard('Existing customers', existing)}
-            {statCard('New customers', newC)}
+            {statCard('Prospects', prospects)}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
             <div>
               <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Summary</div>
-              <div style={{ overflowX: 'auto' }}>
+              <div style={{ overflowX: 'auto', maxHeight: 300 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead><tr style={{ borderBottom: '1px solid #e1e0d9' }}>
+                  <thead><tr style={{ borderBottom: '1px solid #e1e0d9', position: 'sticky', top: 0, background: '#fff' }}>
                     <th style={thS}>Customer type</th>
-                    {last12.map(m => <th key={m} style={{ ...thS, textAlign: 'right' }}>{monthLabel(m)}</th>)}
+                    {displayMonths.map(m => <th key={m} style={{ ...thS, textAlign: 'right' }}>{monthLabel(m)}</th>)}
                     <th style={{ ...thS, textAlign: 'right' }}>Total</th>
                   </tr></thead>
                   <tbody>{pivotRows.map(r => (
                     <tr key={r.group} style={{ borderBottom: '0.5px solid #f0efec', fontWeight: r.group === 'Total' ? 600 : 400 }}>
                       <td style={tdS}>{r.group}</td>
-                      {last12.map(m => <td key={m} style={{ ...tdS, textAlign: 'right' }}>{r[m] || '—'}</td>)}
+                      {displayMonths.map(m => <td key={m} style={{ ...tdS, textAlign: 'right' }}>{r[m] || '—'}</td>)}
                       <td style={{ ...tdS, textAlign: 'right', fontWeight: 600 }}>{r.total}</td>
                     </tr>
                   ))}</tbody>
@@ -297,7 +339,23 @@ export default function Dashboard() {
             </div>
           </div>
           <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Detail</div>
-          {dealTable(['Title','Organisation','Sales person','Estimator','Created','Status','Value'], filtered)}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>{['Title','Organisation','Sales person','Estimator','1st Contact date','Customer type','Status','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
+              <tbody>{filtered.map((d,i) => (
+                <tr key={d.id || i} style={{ background: d.status === 'won' ? '#f0fdf4' : d.status === 'lost' ? '#fef2f2' : '#fff' }}>
+                  <td style={tdS}>{d.title}</td>
+                  <td style={tdS}>{d.organizationName}</td>
+                  <td style={tdS}>{d.salesPerson}</td>
+                  <td style={tdS}>{d.estimator || '—'}</td>
+                  <td style={tdS}>{d.firstContactDate || '—'}</td>
+                  <td style={tdS}>{d.customerType || '—'}</td>
+                  <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status] || '#888') + '22', color: STATUS_COLORS[d.status] || '#888' }}>{d.status}</span></td>
+                  <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
         </div>
       )
     },
