@@ -1,6 +1,16 @@
 import { getValueChanges, saveValueChanges, getCachedDeals, saveCachedDeals, set } from '../../lib/db'
 
 const TRACKED_STAGES = ['MC Unsecured', 'MC Secured', 'Negotiating', 'Variations']
+const BASE = 'https://api.pipedrive.com/v1'
+const KEY = () => process.env.PIPEDRIVE_API_KEY || process.env.Pipedrive_API_Key
+
+async function fetchDeal(dealId) {
+  try {
+    const res = await fetch(`${BASE}/deals/${dealId}?api_token=${KEY()}`)
+    const data = await res.json()
+    return data.data || null
+  } catch { return null }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -8,38 +18,47 @@ export default async function handler(req, res) {
   try {
     const body = req.body
     const meta = body.meta || {}
-    const current = body.current || {}
-    const previous = body.previous || {}
 
-    console.log('Webhook data:', JSON.stringify({ entity_id: meta.entity_id, current_value: current.value, previous_value: previous.value, current_stage: current.stage_id, previous_stage: previous.stage_id }))
+    if (meta.entity !== 'deal') return res.status(200).json({ ok: true, reason: 'not a deal' })
 
     const dealId = String(meta.entity_id)
     const now = new Date().toISOString()
     const changeDate = now.split('T')[0]
+    const action = meta.action // 'change', 'add', etc.
 
-    // Get cached deal for missing fields
+    // Fetch current deal state from Pipedrive API
+    const deal = await fetchDeal(dealId)
+    if (!deal) return res.status(200).json({ ok: true, reason: 'deal not found' })
+
+    const dealTitle = deal.title || ''
+    const organizationName = deal.org_name || deal.org_id?.name || ''
+    const currentStageId = deal.stage_id
+    const currentValue = parseFloat(deal.value) || 0
+
+    // Get cached deals for estimator
     const deals = await getCachedDeals() || []
     const cachedDeal = deals.find(d => String(d.id) === dealId)
-
-    const dealTitle = current.title || cachedDeal?.title || ''
-    const organizationName = current.org_name || cachedDeal?.organizationName || ''
     const estimator = cachedDeal?.estimator || ''
-    
-    // Resolve stage name — use name if available, fall back to cached deal
-    const currentStageId = current.stage_id
-    const previousStageId = previous.stage_id
-    const currentStage = current.stage_name || cachedDeal?.stageName || cachedDeal?.projectStage || ''
-    const previousStage = previous.stage_name || ''
 
-    // Handle value — treat null/undefined as no change
-    const currentValue = current.value != null ? parseFloat(current.value) : null
-    const previousValue = previous.value != null ? parseFloat(previous.value) : null
+    // Get previous value from meta
+    const previousValue = body.meta?.previous_value != null 
+      ? parseFloat(body.meta.previous_value) 
+      : body.previous?.value != null 
+        ? parseFloat(body.previous.value) 
+        : null
+
+    // Get stage info
+    const currentStage = deal.stage_name || cachedDeal?.stageName || ''
+    const previousStageId = body.previous?.stage_id
+    const previousStage = body.previous?.stage_name || ''
+
+    console.log('Webhook:', JSON.stringify({ dealId, dealTitle, currentValue, previousValue, currentStage, previousStage }))
 
     const changes = await getValueChanges()
     const newEntries = []
 
-    // 1. VALUE CHANGE — only if both values exist and are different
-    if (currentValue !== null && previousValue !== null && currentValue !== previousValue) {
+    // 1. VALUE CHANGE — previous value exists and is different from current
+    if (previousValue !== null && currentValue !== previousValue) {
       const alreadyLogged = changes.some(c =>
         c.dealId === dealId &&
         c.oldValue === previousValue &&
@@ -90,7 +109,7 @@ export default async function handler(req, res) {
             estimator,
             fromStage: previousStage,
             toStage: currentStage,
-            currentValue: currentValue || 0,
+            currentValue,
             changeDate,
             stage: currentStage,
             notes: `Stage: ${previousStage} → ${currentStage}`,
@@ -149,12 +168,10 @@ export default async function handler(req, res) {
     if (newEntries.length > 0) {
       await saveValueChanges([...changes, ...newEntries])
       // Update cached deal value
-      if (currentValue !== null) {
-        const updated = deals.map(d =>
-          String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage } : d
-        )
-        await saveCachedDeals(updated)
-      }
+      const updated = deals.map(d =>
+        String(d.id) === dealId ? { ...d, value: currentValue, stageName: currentStage } : d
+      )
+      await saveCachedDeals(updated)
     }
 
     return res.status(200).json({ ok: true, logged: newEntries.length })
