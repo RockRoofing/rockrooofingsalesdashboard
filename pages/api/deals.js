@@ -26,6 +26,7 @@ export default async function handler(req, res) {
     lostReason: d.lostReason,
     stageName: d.stageName,
     over200k: d.over200k,
+    wonCount: d.wonCount || 0,
     firstContactDate: d.firstContactDate || null,
     everIn1stContact: d.everIn1stContact || false,
     receivedDate: d.receivedDate || null,
