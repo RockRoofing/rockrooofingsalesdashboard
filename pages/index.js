@@ -82,6 +82,7 @@ export default function Dashboard() {
   const [srSystemPriced, setSrSystemPriced] = useState('All')
   const [srValueMin, setSrValueMin] = useState('')
   const [srValueMax, setSrValueMax] = useState('')
+  const [lrReasons, setLrReasons] = useState([])
 
   // Persist page in URL
   useEffect(() => {
@@ -961,7 +962,10 @@ export default function Dashboard() {
     },
 
     'Lost Reasons': () => {
-      const lost = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'lost'), 'lostTime'))
+      const allLostReasons = [...new Set(deals.filter(d => d.status === 'lost').map(d => d.lostReason).filter(Boolean))].sort()
+      const lost = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'lost'), 'lostTime')).filter(d => 
+        lrReasons.length === 0 || lrReasons.includes(d.lostReason)
+      )
       const byReason = lost.reduce((acc, d) => {
         const r = d.lostReason || 'No reason given'
         const priced = d.dealPriced === 'Yes' || d.systemPriced ? 'Yes' : 'No'
@@ -975,6 +979,15 @@ export default function Dashboard() {
         <div>
           <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows lost reasons for projects marked as lost in the time period</p>
           {filterBar}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 4 }}>Lost reason (multi-select)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {allLostReasons.map(r => (
+                <button key={r} onClick={() => setLrReasons(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])} style={{ fontSize: 11, padding: '3px 8px', border: '0.5px solid #d0d0cc', borderRadius: 4, background: lrReasons.includes(r) ? '#1a1a19' : '#fff', color: lrReasons.includes(r) ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{r}</button>
+              ))}
+              {lrReasons.length > 0 && <button onClick={() => setLrReasons([])} style={{ fontSize: 11, padding: '3px 8px', border: '0.5px solid #d0d0cc', borderRadius: 4, background: '#fff', color: '#888', cursor: 'pointer', fontFamily: 'inherit' }}>Clear</button>}
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Total lost', lost.length)}
             {statCard('Lost value', fmt(lost.reduce((s,d)=>s+d.value,0)))}
@@ -1182,7 +1195,7 @@ export default function Dashboard() {
       <Head><title>Rock Roofing — Sales Dashboard</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
         <div style={{ background: '#1a1a19', padding: '0 24px', display: 'flex', alignItems: 'center', gap: 24, height: 52 }}>
-          <span style={{ color: '#fff', fontWeight: 500, fontSize: 15 }}>Rock Roofing</span>
+          <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
           <span style={{ color: '#fff', fontSize: 13, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: '#2a2a28' }}>Sales Dashboard</span>
           <span style={{ color: '#444' }}>|</span>
           <a href="/scorecard" style={{ color: '#888', fontSize: 13, textDecoration: 'none', padding: '4px 10px', borderRadius: 6 }}>Scorecards</a>
