@@ -296,7 +296,7 @@ export default function Scorecard() {
   const currentMonthMetrics = getMetrics(currentMonth)
 
   // Fixed card height so both columns line up horizontally regardless of whether a graph is present
-  const CARD_HEIGHT = 132
+  const CARD_HEIGHT = 190
 
   function renderCard(m, metrics, label, withGraph) {
     const actual = metrics[m.key]
@@ -308,14 +308,14 @@ export default function Scorecard() {
     const trendData = allMonthMetrics.map(mm => ({ month: monthLabel(mm.month), value: mm[m.key] }))
     const trendlineValues = computeTrendline(trendData)
     const chartData = trendData.map((d, i) => ({ ...d, trend: trendlineValues[i] }))
-    const dotSize = withGraph ? 28 : 36
+    const dotSize = withGraph ? 48 : 72
 
     return (
       <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr', gap: 16, alignItems: 'center', height: CARD_HEIGHT, boxSizing: 'border-box' }}>
         <div>
           <div style={{ fontSize: 11, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>{m.label}{m.sub && <div style={{ color: '#bbb', fontSize: 10 }}>({m.sub})</div>}</div>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#1a1a19', marginBottom: 4 }}>{actual != null ? m.format(actual) : '—'}</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: dotSize }}>
             {isEditing ? (
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} style={{ width: 70, fontSize: 12, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(m.key, editValue, type); if (e.key === 'Escape') setEditingTarget(null) }} />
@@ -374,7 +374,7 @@ export default function Scorecard() {
           {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading…</div> : (
             <>
               {/* Date filter */}
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 24, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
                 <div>
                   <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
                   <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
@@ -384,11 +384,11 @@ export default function Scorecard() {
                   <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
                 </div>
                 <div style={{ flex: 1 }} />
-                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#888', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#888', alignItems: 'center' }}>
                   <span style={{ fontWeight: 500 }}>Key:</span>
-                  <span><span style={{ color: '#16a34a', fontSize: 20 }}>●</span> On target</span>
-                  <span><span style={{ color: '#ca8a04', fontSize: 20 }}>●</span> Close (≥75%)</span>
-                  <span><span style={{ color: '#e63946', fontSize: 20 }}>●</span> Below target</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#16a34a', fontSize: 36, lineHeight: 1 }}>●</span> On target</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ca8a04', fontSize: 36, lineHeight: 1 }}>●</span> Close (≥75%)</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#e63946', fontSize: 36, lineHeight: 1 }}>●</span> Below target</span>
                 </div>
               </div>
 
@@ -408,7 +408,7 @@ export default function Scorecard() {
                     <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Current month tracking: {monthLabel(currentMonth)} (in progress)</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', true))}
+                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', false))}
                   </div>
                 </div>
               </div>
@@ -419,7 +419,7 @@ export default function Scorecard() {
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e1e0d9', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                       <th style={{ ...thS, minWidth: 220, position: 'sticky', left: 0, background: '#fff' }}>Metric</th>
-                      <th style={{ ...thS, minWidth: 130 }}>Target</th>
+                      <th style={{ ...thS, minWidth: 130, position: 'sticky', left: 220, background: '#fff', zIndex: 1 }}>Target</th>
                       {displayMonths.map(m => <th key={m} style={{ ...thS, textAlign: 'right', minWidth: 80 }}>{monthLabel(m)}</th>)}
                     </tr>
                   </thead>
@@ -427,7 +427,7 @@ export default function Scorecard() {
                     {metricDefs.map(md => (
                       <tr key={md.key} style={{ borderBottom: '0.5px solid #f0efec' }}>
                         <td style={{ ...tdS, position: 'sticky', left: 0, background: '#fff' }}>{md.label}{md.sub && <span style={{ fontSize: 10, color: '#bbb' }}> ({md.sub})</span>}</td>
-                        <td style={{ ...tdS, color: '#888' }}>
+                        <td style={{ ...tdS, color: '#888', position: 'sticky', left: 220, background: '#fff', zIndex: 1 }}>
                           {editingTarget === `table-${md.key}` ? (
                             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                               <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} style={{ width: 70, fontSize: 12, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(md.key, editValue, type); if (e.key === 'Escape') setEditingTarget(null) }} />
