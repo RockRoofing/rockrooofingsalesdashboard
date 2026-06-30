@@ -962,12 +962,19 @@ export default function Dashboard() {
     },
 
     'Lost Reasons': () => {
-      const allLostReasons = [...new Set(deals.filter(d => d.status === 'lost').map(d => d.lostReason).filter(Boolean))].sort()
-      const lost = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'lost'), 'lostTime')).filter(d => 
-        lrReasons.length === 0 || lrReasons.includes(d.lostReason)
-      )
+      // Standard Pipedrive lost reason options (from field definition) — excludes free-text "Other" entries
+      const STANDARD_LOST_REASONS = ['Roofing package already let','Price','Package Contractor','Unable to make contact','Alternative spec','Project Shelved','Project Not Suitable',"Gone with preferred, approved suppy chain",'No Feedback Given','Main Contractor not suitable',"Main Contractor didn't secure",'No Time to Price','No available labour resource','Lead Time','Design Liability']
+      const allLostReasonsRaw = [...new Set(deals.filter(d => d.status === 'lost').map(d => d.lostReason).filter(Boolean))]
+      const hasOther = allLostReasonsRaw.some(r => !STANDARD_LOST_REASONS.includes(r))
+      const allLostReasons = [...STANDARD_LOST_REASONS.filter(r => allLostReasonsRaw.includes(r)), ...(hasOther ? ['Other'] : [])]
+      const lost = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'lost'), 'lostTime')).filter(d => {
+        if (lrReasons.length === 0) return true
+        if (lrReasons.includes('Other') && d.lostReason && !STANDARD_LOST_REASONS.includes(d.lostReason)) return true
+        return lrReasons.includes(d.lostReason)
+      })
       const byReason = lost.reduce((acc, d) => {
-        const r = d.lostReason || 'No reason given'
+        let r = d.lostReason || 'No reason given'
+        if (r !== 'No reason given' && !STANDARD_LOST_REASONS.includes(r)) r = 'Other'
         const priced = d.dealPriced === 'Yes' || d.systemPriced ? 'Yes' : 'No'
         if (!acc[r]) acc[r] = { Yes: 0, No: 0, total: 0 }
         acc[r][priced]++
