@@ -314,8 +314,8 @@ export default function Dashboard() {
         return true
       }))
 
-      const existing = filtered.filter(d => d.customerType === 'Existing').length
-      const prospects = filtered.filter(d => d.customerType !== 'Existing').length
+      const existing = filtered.filter(d => d.customerType === 'Existing Customer').length
+      const prospects = filtered.filter(d => d.customerType === 'Prospect' || d.customerType === 'New Customer').length
 
       // Build months from the date filter range directly
       function getMonthsBetween(fromStr, toStr) {
@@ -341,8 +341,9 @@ export default function Dashboard() {
       }))
 
       const pivotRows = [
-        { group: 'Existing', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Existing' && monthKey(d.firstContactDate) === m).length])), total: existing },
-        { group: 'Prospect', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType !== 'Existing' && monthKey(d.firstContactDate) === m).length])), total: prospects },
+        { group: 'Existing Customer', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Existing Customer' && monthKey(d.firstContactDate) === m).length])), total: filtered.filter(d => d.customerType === 'Existing Customer').length },
+        { group: 'New Customer', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'New Customer' && monthKey(d.firstContactDate) === m).length])), total: filtered.filter(d => d.customerType === 'New Customer').length },
+        { group: 'Prospect', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Prospect' && monthKey(d.firstContactDate) === m).length])), total: filtered.filter(d => d.customerType === 'Prospect').length },
         { group: 'Total', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => monthKey(d.firstContactDate) === m).length])), total: filtered.length },
       ]
 
@@ -413,8 +414,8 @@ export default function Dashboard() {
         if (trLabelFilter === 'lt5' && (!isNaN(score) && score >= 5)) return false
         return true
       }))
-      const existing = filtered.filter(d => d.customerType === 'Existing').length
-      const prospects = filtered.filter(d => d.customerType !== 'Existing').length
+      const existing = filtered.filter(d => d.customerType === 'Existing Customer').length
+      const prospects = filtered.filter(d => d.customerType === 'Prospect' || d.customerType === 'New Customer').length
 
       function getMonthsBetweenTR(fromStr, toStr) {
         const months = []
@@ -437,8 +438,9 @@ export default function Dashboard() {
         count: filtered.filter(d => monthKey(d.receivedDate) === m).length
       }))
       const pivotRows = [
-        { group: 'Existing', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Existing' && monthKey(d.receivedDate) === m).length])), total: existing },
-        { group: 'Prospect', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType !== 'Existing' && monthKey(d.receivedDate) === m).length])), total: prospects },
+        { group: 'Existing Customer', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Existing Customer' && monthKey(d.receivedDate) === m).length])), total: filtered.filter(d => d.customerType === 'Existing Customer').length },
+        { group: 'New Customer', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'New Customer' && monthKey(d.receivedDate) === m).length])), total: filtered.filter(d => d.customerType === 'New Customer').length },
+        { group: 'Prospect', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => d.customerType === 'Prospect' && monthKey(d.receivedDate) === m).length])), total: filtered.filter(d => d.customerType === 'Prospect').length },
         { group: 'Total', ...Object.fromEntries(displayMonths.map(m => [m, filtered.filter(d => monthKey(d.receivedDate) === m).length])), total: filtered.length },
       ]
       return (
@@ -705,9 +707,9 @@ export default function Dashboard() {
         month: monthLabel(m),
         value: secured.filter(d => monthKey(d.wonTime) === m).reduce((s,d) => s+d.value, 0)
       }))
-      const pivotRows = ['Existing','New','Total'].map(type => {
+      const pivotRows = ['Existing Customer','New Customer','Prospect','Total'].map(type => {
         const isTotal = type === 'Total'
-        const arr = isTotal ? secured : secured.filter(d => type === 'Existing' ? d.customerType === 'Existing' : d.customerType !== 'Existing')
+        const arr = isTotal ? secured : secured.filter(d => d.customerType === type)
         return { group: type, ...Object.fromEntries(last12.map(m => [m, arr.filter(d => monthKey(d.wonTime) === m).reduce((s,d)=>s+d.value,0)])), total: arr.reduce((s,d)=>s+d.value,0) }
       })
       return (
@@ -773,7 +775,8 @@ export default function Dashboard() {
       // Stage 2 onwards pipeline stages
       const STAGE2_ONWARDS = ['Stage 2','Review','MC Unsecured - Not Priced','MC Unsecured','MC Secured','Negotiating','Variations']
       
-      const baseFiltered = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'won' || d.status === 'lost'), 'closeTime'))
+      // Only include deals with a value > 0
+      const baseFiltered = applyFilters(filterDealsByDate(deals.filter(d => (d.status === 'won' || d.status === 'lost') && d.value > 0), 'closeTime'))
       
       const closed = baseFiltered.filter(d => {
         // Default: only deals decided from Stage 2 onwards (using projectStage custom field)
@@ -831,11 +834,9 @@ export default function Dashboard() {
         return { month: monthLabel(m), count: parseFloat(srVal.toFixed(1)) }
       })
 
-      // Strike Rate uses different Existing definition: 2+ won projects = Existing, 1 won = Prospect
-      const srExisting = (d) => (d.wonCount || 0) >= 2
-      const summaryRows = ['Existing','Prospect','Total'].map(type => {
+      const summaryRows = ['Existing Customer','New Customer','Prospect','Total'].map(type => {
         const isTotal = type === 'Total'
-        const arr = isTotal ? closed : closed.filter(d => type === 'Existing' ? srExisting(d) : !srExisting(d))
+        const arr = isTotal ? closed : closed.filter(d => d.customerType === type)
         const w = arr.filter(d => d.status === 'won')
         const l = arr.filter(d => d.status === 'lost')
         return { type, wonCount: w.length, lostCount: l.length, srCount: arr.length ? w.length/arr.length : null, wonVal: w.reduce((s,d)=>s+d.value,0), lostVal: l.reduce((s,d)=>s+d.value,0), srVal: arr.reduce((s,d)=>s+d.value,0) ? w.reduce((s,d)=>s+d.value,0)/arr.reduce((s,d)=>s+d.value,0) : null }
