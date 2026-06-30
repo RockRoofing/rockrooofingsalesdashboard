@@ -4,11 +4,11 @@ const DEFAULT_TARGETS = {
   estimator: {
     strikeRateOverall: 0.25,
     strikeRateMCSecured: 0.30,
-    strikeRateMCUnsecured: 0.05,
     valuePricedExisting: 300000,
     totalValuePriced: 667000,
     totalValueSecured: 133000,
     dealsSecuredOver200k: 1,
+    gpMargin: 0.25,
   },
   sales: {
     gleniganReceived: 6,
