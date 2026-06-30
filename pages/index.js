@@ -166,12 +166,15 @@ export default function Dashboard() {
     return true
   })
 
+  // Fields where Blank option makes sense (customisable/label fields, not automatic ones)
+  const BLANK_ELIGIBLE = ['estimator', 'leadSource', 'region', 'systemPriced', 'projectType', 'customerType']
   const uniq = (arr, key) => {
     const noSplit = ['customerType', 'estimator', 'salesPerson', 'organizationName', 'region', 'status', 'projectType']
     const vals = arr.map(d => d[key])
+    const blankOpt = BLANK_ELIGIBLE.includes(key) ? ['Blank'] : []
     const unique = noSplit.includes(key)
-      ? ['All', 'Blank', ...new Set(vals.filter(Boolean))].sort()
-      : ['All', 'Blank', ...new Set(vals.filter(Boolean).flatMap(v => v.includes(',') ? v.split(',').map(s => s.trim()) : [v]))].sort()
+      ? ['All', ...blankOpt, ...new Set(vals.filter(Boolean))].sort((a,b) => a === 'All' ? -1 : b === 'All' ? 1 : a === 'Blank' ? -1 : b === 'Blank' ? 1 : a.localeCompare(b))
+      : ['All', ...blankOpt, ...new Set(vals.filter(Boolean).flatMap(v => v.includes(',') ? v.split(',').map(s => s.trim()) : [v]))].sort((a,b) => a === 'All' ? -1 : b === 'All' ? 1 : a === 'Blank' ? -1 : b === 'Blank' ? 1 : a.localeCompare(b))
     return unique
   }
   
