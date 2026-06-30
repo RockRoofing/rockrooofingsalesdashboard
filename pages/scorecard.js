@@ -7,6 +7,9 @@ const pct = (n) => n == null ? '—' : (n * 100).toFixed(1) + '%'
 const monthLabel = (s) => s ? new Date(s + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : ''
 const monthKey = (s) => s ? s.substring(0, 7) : null
 
+const LEAD_SOURCE_KEY = '86cfae1776cc556bc156feb089649becd3e723e6'
+const SALES_PERSON_KEY = 'edb0162ddb7bac7835f5858cec43b6c31d20b042'
+
 function getMonthsBetween(fromStr, toStr) {
   const months = []
   const [fy, fm] = fromStr.split('-').map(Number)
@@ -19,11 +22,10 @@ function getMonthsBetween(fromStr, toStr) {
   return months
 }
 
-// Correct last full calendar month — e.g. on 30 June, last full month is May
 function getLastFullMonth() {
   const now = new Date()
   const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastFull = new Date(firstOfThisMonth.getTime() - 1) // last day of previous month
+  const lastFull = new Date(firstOfThisMonth.getTime() - 1)
   return lastFull.toISOString().substring(0, 7)
 }
 
@@ -40,26 +42,29 @@ function rag(actual, target, mode = 'normal') {
   return '#e63946'
 }
 
-// Simple linear regression trendline over numeric (index, value) pairs
 function computeTrendline(data) {
-  const points = data
-    .map((d, i) => ({ i, value: d.value }))
-    .filter(d => d.value != null && !isNaN(d.value))
+  const points = data.map((d, i) => ({ i, value: d.value })).filter(d => d.value != null && !isNaN(d.value))
   if (points.length < 2) return data.map(() => null)
-
   const n = points.length
   const sumX = points.reduce((s, p) => s + p.i, 0)
   const sumY = points.reduce((s, p) => s + p.value, 0)
   const sumXY = points.reduce((s, p) => s + p.i * p.value, 0)
   const sumX2 = points.reduce((s, p) => s + p.i * p.i, 0)
-
   const denom = (n * sumX2 - sumX * sumX)
   if (denom === 0) return data.map(() => null)
-
   const slope = (n * sumXY - sumX * sumY) / denom
   const intercept = (sumY - slope * sumX) / n
-
   return data.map((_, i) => slope * i + intercept)
+}
+
+// Helper: get lead source value from deal (handles both mapped field name and raw API key)
+function getLeadSource(d) {
+  return d.leadSource || d[LEAD_SOURCE_KEY] || ''
+}
+
+// Helper: get sales person from deal
+function getSalesPerson(d) {
+  return d.salesPerson || d[SALES_PERSON_KEY] || d.ownerName || ''
 }
 
 const DEFAULT_TARGETS = {
@@ -76,15 +81,71 @@ const DEFAULT_TARGETS = {
     gleniganReceived: 6,
     gleniganPriced: 3,
     gleniganScored5: 3,
-    websiteReceived: 7,
-    websitePriced: 4,
     strikeRateValue: 0.25,
-    valuePricedExisting: 800000,
+    strikeRateMCSecNeg: 0.30,
     totalValuePriced: 2000000,
     projectsPricedOver200k: 9,
     totalValueSecured: 400000,
     projectsSecuredOver200k: 3,
   }
+}
+
+// Drill-down modal component
+function DrillModal({ title, projects, onClose }) {
+  if (!projects || projects.length === 0) return null
+  const tdS = { padding: '7px 10px', borderBottom: '0.5px solid #f0efec', fontSize: 12, verticalAlign: 'middle' }
+  const thS = { padding: '8px 10px', fontWeight: 500, color: '#555', textAlign: 'left', fontSize: 12, borderBottom: '1px solid #e1e0d9', whiteSpace: 'nowrap' }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1000, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e1e0d9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
+            <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
+          </div>
+          <button onClick={onClose} style={{ fontSize: 18, border: 'none', background: 'none', cursor: 'pointer', color: '#888', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+              <tr>
+                <th style={thS}>Project</th>
+                <th style={thS}>Organisation</th>
+                <th style={{ ...thS, textAlign: 'right' }}>Value</th>
+                <th style={thS}>Estimator</th>
+                <th style={thS}>Sales Person</th>
+                <th style={thS}>Stage</th>
+                <th style={thS}>Lead Source</th>
+                <th style={{ ...thS, textAlign: 'center' }}>Score</th>
+                <th style={thS}>Decision Date</th>
+                <th style={thS}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((d, i) => (
+                <tr key={d.id || i} style={{ background: i % 2 === 0 ? '#fff' : '#fafaf9' }}>
+                  <td style={tdS}>{d.title || '—'}</td>
+                  <td style={tdS}>{d.orgName || d.organisation || '—'}</td>
+                  <td style={{ ...tdS, textAlign: 'right', fontWeight: 500 }}>{d.value ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(d.value) : '—'}</td>
+                  <td style={tdS}>{d.estimator || '—'}</td>
+                  <td style={tdS}>{getSalesPerson(d) || '—'}</td>
+                  <td style={tdS}>{d.stageName || '—'}</td>
+                  <td style={tdS}>{getLeadSource(d) || '—'}</td>
+                  <td style={{ ...tdS, textAlign: 'center' }}>{d.label || '—'}</td>
+                  <td style={tdS}>{d.closeTime ? new Date(d.closeTime).toLocaleDateString('en-GB') : '—'}</td>
+                  <td style={tdS}>
+                    <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 7px', borderRadius: 10, background: d.status === 'won' ? '#dcfce7' : d.status === 'lost' ? '#fee2e2' : '#f3f4f6', color: d.status === 'won' ? '#16a34a' : d.status === 'lost' ? '#e63946' : '#555' }}>
+                      {d.status || 'open'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function Scorecard() {
@@ -97,6 +158,7 @@ export default function Scorecard() {
   const [targets, setTargets] = useState(null)
   const [editingTarget, setEditingTarget] = useState(null)
   const [editValue, setEditValue] = useState('')
+  const [modal, setModal] = useState(null) // { title, projects }
 
   const lastFullMonth = getLastFullMonth()
   const currentMonth = getCurrentMonth()
@@ -170,12 +232,11 @@ export default function Scorecard() {
 
   const personDeals = isEstimator
     ? deals.filter(d => d.estimator === person)
-    : deals.filter(d => d.salesPerson === person || d.ownerName === person)
+    : deals.filter(d => getSalesPerson(d) === 'Edita Durikova')
 
   const personDealIds = new Set(personDeals.map(d => String(d.id)))
   const personValueChanges = valueChanges.filter(v => personDealIds.has(v.dealId))
 
-  // Compute Estimator metrics for a given month
   function getEstimatorMetrics(m) {
     const mStart = m + '-01'
     const mEndDate = new Date(new Date(mStart).getFullYear(), new Date(mStart).getMonth() + 1, 0)
@@ -184,18 +245,15 @@ export default function Scorecard() {
     const monthClosed = personDeals.filter(d => (d.status === 'won' || d.status === 'lost') && d.value > 0 && monthKey(d.closeTime) === m)
     const monthWon = monthClosed.filter(d => d.status === 'won')
 
-    // Rolling 6 months strike rate up to and including this month
     const sixMonthsAgo = new Date(mEndDate.getFullYear(), mEndDate.getMonth() - 5, 1).toISOString().split('T')[0]
     const rolling6 = personDeals.filter(d => (d.status === 'won' || d.status === 'lost') && d.value > 0 && d.closeTime >= sixMonthsAgo && d.closeTime <= mEnd)
     const rolling6Won = rolling6.filter(d => d.status === 'won')
     const strikeRateOverall = rolling6.length ? rolling6Won.reduce((s,d)=>s+d.value,0) / rolling6.reduce((s,d)=>s+d.value,0) : null
 
-    // MC Secured/Negotiating strike rate (rolling 6 months, by pipeline stage at decision)
     const mcRolling = rolling6.filter(d => ['MC Secured','Negotiating'].includes(d.stageName))
     const mcRollingWon = mcRolling.filter(d => d.status === 'won')
     const strikeRateMCSecured = mcRolling.length ? mcRollingWon.reduce((s,d)=>s+d.value,0) / mcRolling.reduce((s,d)=>s+d.value,0) : null
 
-    // Value priced - from webhook value changes this month, deals where customer is Existing Customer
     const monthChanges = personValueChanges.filter(v => v.changeDate && monthKey(v.changeDate) === m)
     const existingChanges = monthChanges.filter(v => {
       const deal = deals.find(d => String(d.id) === v.dealId)
@@ -203,81 +261,109 @@ export default function Scorecard() {
     })
     const valuePricedExisting = existingChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
     const totalValuePriced = monthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
-
     const totalValueSecured = monthWon.reduce((s,d) => s+d.value, 0)
-
     const dealsOver200kMonth = personDeals.filter(d => d.status === 'won' && d.over200k && monthKey(d.wonTime) === m).length
-
-    // Rolling 3 month check for RAG (not displayed value, just for status)
     const threeMonthsAgo = new Date(mEndDate.getFullYear(), mEndDate.getMonth() - 2, 1).toISOString().split('T')[0]
     const dealsOver200kRolling3 = personDeals.filter(d => d.status === 'won' && d.over200k && d.wonTime >= threeMonthsAgo && d.wonTime <= mEnd).length
 
     return {
-      strikeRateOverall,
-      strikeRateMCSecured,
-      valuePricedExisting,
-      totalValuePriced,
-      totalValueSecured,
-      dealsSecuredOver200k: dealsOver200kMonth,
-      dealsSecuredOver200kRolling3: dealsOver200kRolling3,
-      gpMargin: null,
+      strikeRateOverall, strikeRateMCSecured, valuePricedExisting, totalValuePriced,
+      totalValueSecured, dealsSecuredOver200k: dealsOver200kMonth,
+      dealsSecuredOver200kRolling3: dealsOver200kRolling3, gpMargin: null,
+      // drill-down project sets
+      _rolling6Projects: rolling6,
+      _mcRollingProjects: mcRolling,
+      _monthWonProjects: monthWon,
     }
   }
 
   function getSalesMetrics(m) {
-    const gleniganDeals = deals.filter(d => d.leadSource?.includes('Glenigan'))
-    const websiteDeals = deals.filter(d => d.leadSource?.includes('Website'))
+    // Glenigan deals: current leadSource = Glenigan, date = receivedDate month
+    const gleniganDeals = deals.filter(d => getLeadSource(d)?.toLowerCase().includes('glenigan'))
+    
+    // #1 Glenigan received: entered Received stage in month m AND current lead source = Glenigan
+    const gleniganReceivedProjects = gleniganDeals.filter(d => d.receivedDate && monthKey(d.receivedDate) === m)
+    const gleniganReceived = gleniganReceivedProjects.length
 
-    const gleniganReceived = gleniganDeals.filter(d => monthKey(d.receivedDate) === m).length
-    const gleniganPriced = gleniganDeals.filter(d => monthKey(d.receivedDate) === m && d.dealPriced === 'Yes').length
-    const gleniganScored5 = gleniganDeals.filter(d => parseInt(d.label) >= 5).length
+    // #2 Glenigan priced: Glenigan received deals that have had a value assigned (value > 0)
+    const gleniganPricedProjects = gleniganReceivedProjects.filter(d => d.value > 0)
+    const gleniganPriced = gleniganPricedProjects.length
 
-    const websiteReceived = websiteDeals.filter(d => monthKey(d.receivedDate) === m).length
-    const websitePriced = websiteDeals.filter(d => monthKey(d.receivedDate) === m && d.dealPriced === 'Yes').length
-
-    const monthClosed = deals.filter(d => (d.status === 'won' || d.status === 'lost') && d.value > 0 && monthKey(d.closeTime) === m)
-    const monthWon = monthClosed.filter(d => d.status === 'won')
-    const strikeRateValue = monthClosed.length ? monthWon.reduce((s,d)=>s+d.value,0) / monthClosed.reduce((s,d)=>s+d.value,0) : null
-
-    const monthChanges = valueChanges.filter(v => v.changeDate && monthKey(v.changeDate) === m)
-    const existingChanges = monthChanges.filter(v => {
-      const deal = deals.find(d => String(d.id) === v.dealId)
-      return deal?.customerType === 'Existing Customer'
+    // #3 Glenigan scored >=5: Glenigan deals received in month where label (score) >= 5
+    const gleniganScored5Projects = gleniganReceivedProjects.filter(d => {
+      const score = parseInt(d.label)
+      return !isNaN(score) && score >= 5
     })
-    const valuePricedExisting = existingChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
-    const totalValuePriced = monthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
+    const gleniganScored5 = gleniganScored5Projects.length
 
-    const totalValueSecured = monthWon.reduce((s,d)=>s+d.value,0)
-    const projectsPricedOver200k = monthChanges.filter(v => v.newValue >= 200000).length
-    const projectsSecuredOver200k = monthWon.filter(d => d.over200k).length
+    // #5 Strike rate (value): all deals with a value decided in month m, all estimators
+    // Uses receivedDate for "received" deals — applies to all projects that have gone through pipeline
+    const allClosed = deals.filter(d => (d.status === 'won' || d.status === 'lost') && d.value > 0 && monthKey(d.closeTime) === m)
+    const allWon = allClosed.filter(d => d.status === 'won')
+    const strikeRateValue = allClosed.length
+      ? allWon.reduce((s,d)=>s+d.value,0) / allClosed.reduce((s,d)=>s+d.value,0)
+      : null
 
-    return { gleniganReceived, gleniganPriced, gleniganScored5, websiteReceived, websitePriced, strikeRateValue, valuePricedExisting, totalValuePriced, projectsPricedOver200k, totalValueSecured, projectsSecuredOver200k }
+    // #6 Strike rate MC Secured/Negotiating: all estimators, only MC Secured + Negotiating stage deals decided in month m
+    const mcSecNegClosed = allClosed.filter(d => ['MC Secured','Negotiating'].includes(d.stageName))
+    const mcSecNegWon = mcSecNegClosed.filter(d => d.status === 'won')
+    const strikeRateMCSecNeg = mcSecNegClosed.length
+      ? mcSecNegWon.reduce((s,d)=>s+d.value,0) / mcSecNegClosed.reduce((s,d)=>s+d.value,0)
+      : null
+
+    // #7 Total value of work priced: value changes across ALL estimators in month m
+    const allMonthChanges = valueChanges.filter(v => v.changeDate && monthKey(v.changeDate) === m)
+    const totalValuePriced = allMonthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
+
+    // #8 Projects priced >=200k: all estimators, value change where newValue >= 200k
+    const projectsPricedOver200kList = allMonthChanges.filter(v => (v.newValue || 0) >= 200000)
+    const projectsPricedOver200k = projectsPricedOver200kList.length
+
+    // #9 Total value secured: all estimators, won deals in month m
+    const totalValueSecured = allWon.reduce((s,d)=>s+d.value,0)
+
+    // #10 Projects secured >=200k: all estimators, won deals in month m with value >= 200k
+    const projectsSecuredOver200kList = allWon.filter(d => d.value >= 200000)
+    const projectsSecuredOver200k = projectsSecuredOver200kList.length
+
+    return {
+      gleniganReceived, gleniganPriced, gleniganScored5,
+      strikeRateValue, strikeRateMCSecNeg,
+      totalValuePriced, projectsPricedOver200k,
+      totalValueSecured, projectsSecuredOver200k,
+      // drill-down project sets
+      _gleniganReceivedProjects: gleniganReceivedProjects,
+      _gleniganPricedProjects: gleniganPricedProjects,
+      _gleniganScored5Projects: gleniganScored5Projects,
+      _allClosedProjects: allClosed,
+      _mcSecNegClosedProjects: mcSecNegClosed,
+      _allWonProjects: allWon,
+      _projectsSecuredOver200kList: projectsSecuredOver200kList,
+    }
   }
 
   const getMetrics = isEstimator ? getEstimatorMetrics : getSalesMetrics
 
   const estimatorMetricDefs = [
-    { key: 'strikeRateOverall', label: 'Strike rate (overall)', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateOverall' },
-    { key: 'strikeRateMCSecured', label: 'Strike rate (MC Secured/Negotiating)', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateMCSecured' },
+    { key: 'strikeRateOverall', label: 'Strike rate (overall)', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateOverall', drillKey: '_rolling6Projects' },
+    { key: 'strikeRateMCSecured', label: 'Strike rate (MC Secured/Negotiating)', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateMCSecured', drillKey: '_mcRollingProjects' },
     { key: 'valuePricedExisting', label: 'Value priced — existing customers', format: fmt, targetKey: 'valuePricedExisting' },
     { key: 'totalValuePriced', label: 'Total value of work priced', sub: 'Value change data', format: fmt, targetKey: 'totalValuePriced' },
-    { key: 'totalValueSecured', label: 'Total value of work secured', format: fmt, targetKey: 'totalValueSecured' },
+    { key: 'totalValueSecured', label: 'Total value of work secured', format: fmt, targetKey: 'totalValueSecured', drillKey: '_monthWonProjects' },
     { key: 'dealsSecuredOver200k', label: 'Deals secured ≥£200K', sub: 'Per month, target 1/quarter', format: v => v, targetKey: 'dealsSecuredOver200k', mode: 'binary', useRolling3: true },
     { key: 'gpMargin', label: 'GP margin — own projects', sub: 'Coming soon — Xero integration', format: () => '—', targetKey: 'gpMargin' },
   ]
 
   const salesMetricDefs = [
-    { key: 'gleniganReceived', label: 'Glenigan enquiries received', format: v => v, targetKey: 'gleniganReceived' },
-    { key: 'gleniganPriced', label: 'Glenigan enquiries priced', format: v => v, targetKey: 'gleniganPriced' },
-    { key: 'gleniganScored5', label: 'Glenigan scored ≥5', format: v => v, targetKey: 'gleniganScored5' },
-    { key: 'websiteReceived', label: 'Website enquiries received', format: v => v, targetKey: 'websiteReceived' },
-    { key: 'websitePriced', label: 'Website enquiries priced', format: v => v, targetKey: 'websitePriced' },
-    { key: 'strikeRateValue', label: 'Strike rate (value)', format: pct, targetKey: 'strikeRateValue' },
-    { key: 'valuePricedExisting', label: 'Value priced — existing customers', format: fmt, targetKey: 'valuePricedExisting' },
-    { key: 'totalValuePriced', label: 'Total value of work priced', format: fmt, targetKey: 'totalValuePriced' },
-    { key: 'projectsPricedOver200k', label: 'Projects priced ≥£200K', format: v => v, targetKey: 'projectsPricedOver200k' },
-    { key: 'totalValueSecured', label: 'Total value of work secured', format: fmt, targetKey: 'totalValueSecured' },
-    { key: 'projectsSecuredOver200k', label: 'Projects secured ≥£200K', format: v => v, targetKey: 'projectsSecuredOver200k' },
+    { key: 'gleniganReceived', label: 'Glenigan enquiries received', format: v => v, targetKey: 'gleniganReceived', drillKey: '_gleniganReceivedProjects' },
+    { key: 'gleniganPriced', label: 'Glenigan enquiries priced', format: v => v, targetKey: 'gleniganPriced', drillKey: '_gleniganPricedProjects' },
+    { key: 'gleniganScored5', label: 'Glenigan scored ≥5', format: v => v, targetKey: 'gleniganScored5', drillKey: '_gleniganScored5Projects' },
+    { key: 'strikeRateValue', label: 'Strike rate (value) — all estimators', format: pct, targetKey: 'strikeRateValue', drillKey: '_allClosedProjects' },
+    { key: 'strikeRateMCSecNeg', label: 'Strike rate — MC Secured/Negotiating', sub: 'All estimators', format: pct, targetKey: 'strikeRateMCSecNeg', drillKey: '_mcSecNegClosedProjects' },
+    { key: 'totalValuePriced', label: 'Total value of work priced', sub: 'All estimators', format: fmt, targetKey: 'totalValuePriced' },
+    { key: 'projectsPricedOver200k', label: 'Projects priced ≥£200K', sub: 'All estimators', format: v => v, targetKey: 'projectsPricedOver200k' },
+    { key: 'totalValueSecured', label: 'Total value of work secured', sub: 'All estimators', format: fmt, targetKey: 'totalValueSecured', drillKey: '_allWonProjects' },
+    { key: 'projectsSecuredOver200k', label: 'Projects secured ≥£200K', sub: 'All estimators', format: v => v, targetKey: 'projectsSecuredOver200k', drillKey: '_projectsSecuredOver200kList' },
   ]
 
   const metricDefs = isEstimator ? estimatorMetricDefs : salesMetricDefs
@@ -295,15 +381,22 @@ export default function Scorecard() {
   const lastFullMonthMetrics = getMetrics(lastFullMonth)
   const currentMonthMetrics = getMetrics(currentMonth)
 
-  // Fixed card height so both columns line up horizontally regardless of whether a graph is present
   const CARD_HEIGHT = 190
 
-  function renderCard(m, metrics, label, withGraph) {
+  function openDrill(m, metrics, monthStr) {
+    if (!m.drillKey) return
+    const projects = metrics[m.drillKey] || []
+    if (projects.length === 0) return
+    setModal({ title: `${m.label} — ${monthLabel(monthStr)}`, projects })
+  }
+
+  function renderCard(m, metrics, label, withGraph, monthStr) {
     const actual = metrics[m.key]
     const target = t[m.targetKey]
     const useRolling = m.useRolling3 ? metrics.dealsSecuredOver200kRolling3 : actual
     const color = m.mode === 'binary' ? rag(useRolling, target, 'binary') : rag(actual, target)
     const isEditing = editingTarget === `${label}-${m.key}`
+    const hasDrill = !!m.drillKey && (metrics[m.drillKey]?.length > 0)
 
     const trendData = allMonthMetrics.map(mm => ({ month: monthLabel(mm.month), value: mm[m.key] }))
     const trendlineValues = computeTrendline(trendData)
@@ -311,11 +404,31 @@ export default function Scorecard() {
     const dotSize = 48
 
     return (
-      <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr', gap: 16, alignItems: 'center', height: CARD_HEIGHT, boxSizing: 'border-box' }}>
+      <div
+        key={m.key}
+        onClick={() => hasDrill && openDrill(m, metrics, monthStr)}
+        style={{
+          background: '#fff', borderRadius: 10, padding: '14px 16px',
+          border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr',
+          gap: 16, alignItems: 'center', height: CARD_HEIGHT, boxSizing: 'border-box',
+          cursor: hasDrill ? 'pointer' : 'default',
+          transition: 'box-shadow 0.15s',
+        }}
+        onMouseEnter={e => { if (hasDrill) e.currentTarget.style.boxShadow = '0 3px 12px rgba(0,0,0,0.1)' }}
+        onMouseLeave={e => { if (hasDrill) e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)' }}
+      >
         <div style={!withGraph ? { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' } : undefined}>
-          <div style={{ fontSize: 14, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>{m.label}{m.sub && <div style={{ color: '#bbb', fontSize: 13 }}>({m.sub})</div>}</div>
+          <div style={{ fontSize: 14, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>
+            {m.label}
+            {hasDrill && <span style={{ fontSize: 10, color: '#bbb', marginLeft: 4 }}>↗</span>}
+            {m.sub && <div style={{ color: '#bbb', fontSize: 13 }}>({m.sub})</div>}
+          </div>
           <div style={{ fontSize: 29, fontWeight: 600, color: '#1a1a19', marginBottom: 4 }}>{actual != null ? m.format(actual) : '—'}</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: withGraph ? 'space-between' : 'center', gap: withGraph ? 0 : 16, minHeight: dotSize, width: '100%' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: withGraph ? 'space-between' : 'center', gap: withGraph ? 0 : 16, minHeight: dotSize, width: '100%' }}
+            onClick={e => { e.stopPropagation() }}
+          >
             {isEditing ? (
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} style={{ width: 70, fontSize: 16, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(m.key, editValue, type); if (e.key === 'Escape') setEditingTarget(null) }} />
@@ -352,6 +465,8 @@ export default function Scorecard() {
     <>
       <Head><title>Rock Roofing — Scorecards</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
+        {modal && <DrillModal title={modal.title} projects={modal.projects} onClose={() => setModal(null)} />}
+
         <div style={{ background: '#1a1a19', padding: '0 24px', display: 'flex', alignItems: 'center', gap: 8, height: 52 }}>
           <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
           <a href="/" style={{ color: '#888', fontSize: 13, textDecoration: 'none', padding: '4px 10px', borderRadius: 6 }}>Sales Dashboard</a>
@@ -373,7 +488,6 @@ export default function Scorecard() {
         <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
           {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading…</div> : (
             <>
-              {/* Date filter */}
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
                 <div>
                   <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
@@ -399,7 +513,7 @@ export default function Scorecard() {
                     <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Last full month: {monthLabel(lastFullMonth)}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {metricDefs.map(m => renderCard(m, lastFullMonthMetrics, 'last', true))}
+                    {metricDefs.map(m => renderCard(m, lastFullMonthMetrics, 'last', true, lastFullMonth))}
                   </div>
                 </div>
                 <div>
@@ -408,7 +522,7 @@ export default function Scorecard() {
                     <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Current month tracking: {monthLabel(currentMonth)} (in progress)</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', false))}
+                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', false, currentMonth))}
                   </div>
                 </div>
               </div>
@@ -443,7 +557,11 @@ export default function Scorecard() {
                           const val = mm[md.key]
                           const color = md.mode === 'binary' ? rag(val, t[md.targetKey], 'binary') : rag(val, t[md.targetKey])
                           return (
-                            <td key={mm.month} style={{ ...tdS, textAlign: 'right', color: val != null ? color : '#ddd', fontWeight: val != null ? 500 : 400 }}>
+                            <td
+                              key={mm.month}
+                              style={{ ...tdS, textAlign: 'right', color: val != null ? color : '#ddd', fontWeight: val != null ? 500 : 400, cursor: md.drillKey ? 'pointer' : 'default' }}
+                              onClick={() => md.drillKey && openDrill(md, mm, mm.month)}
+                            >
                               {val != null ? md.format(val) : '—'}
                             </td>
                           )
