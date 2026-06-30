@@ -77,6 +77,11 @@ export default function Dashboard() {
   const [ppStages, setPpStages] = useState([])
   const [ppFilters, setPpFilters] = useState({ customerType: 'All', estimator: 'All', salesPerson: 'All', status: 'All', leadSource: 'All', region: 'All', custName: 'All', systemPriced: 'All' })
   const [trLabelFilter, setTrLabelFilter] = useState('All') // 'All', 'gte5', 'lt5'
+  const [srVariation, setSrVariation] = useState('All') // 'All', 'Variations', 'Projects'
+  const [srStages, setSrStages] = useState([])
+  const [srSystemPriced, setSrSystemPriced] = useState('All')
+  const [srValueMin, setSrValueMin] = useState('')
+  const [srValueMax, setSrValueMax] = useState('')
 
   // Persist page in URL
   useEffect(() => {
@@ -752,38 +757,127 @@ export default function Dashboard() {
     },
 
     'Strike Rate': () => {
-      const closed = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'won' || d.status === 'lost'), 'closeTime'))
+      const RECEIVED_ONWARDS = ['Received','Stage 1','Stage 2','Review','MC Unsecured - Not Priced','MC Unsecured','MC Secured','Negotiating']
+      
+      const baseFiltered = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'won' || d.status === 'lost'), 'closeTime'))
+      
+      const closed = baseFiltered.filter(d => {
+        // Variation filter
+        const isVariation = d.stageName === 'Variations' || d.projectStage === 'Variations'
+        if (srVariation === 'Variations' && !isVariation) return false
+        if (srVariation === 'Projects' && isVariation) return false
+        // Project Stage multi-select
+        if (srStages.length > 0 && !srStages.includes(d.projectStage)) return false
+        // System priced filter
+        if (srSystemPriced !== 'All' && !d.systemPriced?.includes(srSystemPriced)) return false
+        // Value range
+        if (srValueMin && d.value < parseFloat(srValueMin)) return false
+        if (srValueMax && d.value > parseFloat(srValueMax)) return false
+        return true
+      })
+
       const won = closed.filter(d => d.status === 'won')
       const lost = closed.filter(d => d.status === 'lost')
       const srValue = closed.length ? won.reduce((s,d)=>s+d.value,0) / closed.reduce((s,d)=>s+d.value,0) : null
       const srCount = closed.length ? won.length / closed.length : null
-      const monthData = last12.map(m => {
-        const mClosed = closed.filter(d => monthKey(d.closeTime) === m)
-        const mWon = mClosed.filter(d => d.status === 'won')
-        return { month: monthLabel(m), count: mClosed.length ? mWon.length / mClosed.length * 100 : 0 }
+
+      // Rolling 6-month trendline
+      const rollingData = last12.map((m, idx) => {
+        // Get last 6 months up to and including this month
+        const sixMonthKeys = last12.slice(Math.max(0, idx - 5), idx + 1)
+        const periodClosed = closed.filter(d => sixMonthKeys.includes(monthKey(d.closeTime)))
+        const periodWon = periodClosed.filter(d => d.status === 'won')
+        const srVal = periodClosed.length ? periodWon.reduce((s,d)=>s+d.value,0) / periodClosed.reduce((s,d)=>s+d.value,0) * 100 : 0
+        return { month: monthLabel(m), count: srVal }
       })
-      const summaryRows = ['Existing','New','Total'].map(type => {
+
+      const summaryRows = ['Existing','Prospect','Total'].map(type => {
         const isTotal = type === 'Total'
         const arr = isTotal ? closed : closed.filter(d => type === 'Existing' ? d.customerType === 'Existing' : d.customerType !== 'Existing')
         const w = arr.filter(d => d.status === 'won')
         const l = arr.filter(d => d.status === 'lost')
         return { type, wonCount: w.length, lostCount: l.length, srCount: arr.length ? w.length/arr.length : null, wonVal: w.reduce((s,d)=>s+d.value,0), lostVal: l.reduce((s,d)=>s+d.value,0), srVal: arr.reduce((s,d)=>s+d.value,0) ? w.reduce((s,d)=>s+d.value,0)/arr.reduce((s,d)=>s+d.value,0) : null }
       })
+
+      const srStageOptions = ['Stage 2','Review','MC Unsecured - Not Priced','MC Unsecured','MC Secured','Negotiating','Variations']
+      const systemPricedOpts = ['All', ...new Set(deals.map(d => d.systemPriced).filter(Boolean).flatMap(v => v.split(',').map(s => s.trim())))].sort()
+
       return (
         <div>
-          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows strike rates for decided deals by decision date</p>
-          {filterBar}
+          <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Shows strike rates for decided deals by decision date. Trend shows rolling 6-month strike rate.</p>
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f8f8f7', borderRadius: 8, border: '0.5px solid #e1e0d9' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {[
+                { label: 'Customer type', key: 'customerType', opts: uniq(deals, 'customerType') },
+                { label: 'Estimator', key: 'estimator', opts: uniq(deals, 'estimator') },
+                { label: 'Lead source', key: 'leadSource', opts: uniq(deals, 'leadSource') },
+                { label: 'Region', key: 'region', opts: uniq(deals, 'region') },
+              ].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>{f.label}</label>
+                  <select value={filters[f.key]} onChange={e => setFilters(p => ({...p, [f.key]: e.target.value}))} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
+                    {f.opts.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+              ))}
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>System priced</label>
+                <select value={srSystemPriced} onChange={e => setSrSystemPriced(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', fontFamily: 'inherit' }}>
+                  {systemPricedOpts.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Type</label>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['All','Projects','Variations'].map(v => (
+                    <button key={v} onClick={() => setSrVariation(v)} style={{ fontSize: 12, padding: '4px 8px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: srVariation === v ? '#1a1a19' : '#fff', color: srVariation === v ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{v}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Project stage (multi-select)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {srStageOptions.map(s => (
+                    <button key={s} onClick={() => setSrStages(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} style={{ fontSize: 11, padding: '3px 8px', border: '0.5px solid #d0d0cc', borderRadius: 4, background: srStages.includes(s) ? '#1a1a19' : '#fff', color: srStages.includes(s) ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Min value (£)</label>
+                <input type="number" value={srValueMin} onChange={e => setSrValueMin(e.target.value)} placeholder="0" style={{ width: 100, fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Max value (£)</label>
+                <input type="number" value={srValueMax} onChange={e => setSrValueMax(e.target.value)} placeholder="No limit" style={{ width: 100, fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>From</label>
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
+              </div>
+              <button onClick={() => { setFilters(f => ({...f, customerType:'All', estimator:'All', leadSource:'All', region:'All'})); setSrVariation('All'); setSrStages([]); setSrSystemPriced('All'); setSrValueMin(''); setSrValueMax('') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {statCard('Strike rate (value)', srValue != null ? pct(srValue) : '—', 'Target: 25%')}
             {statCard('Strike rate (count)', srCount != null ? pct(srCount) : '—')}
             {statCard('Won', won.length)}
             {statCard('Lost', lost.length)}
           </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
             <div>
               <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Summary</div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead><tr>{['Customer type','Won','Lost','SR (count)','Won value','Lost value','SR (value)'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
+                <thead><tr>{['Customer type','Won','Lost','SR (count)','Won value','Lost value','SR (value)','Variation'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
                 <tbody>{summaryRows.map(r => (
                   <tr key={r.type} style={{ borderBottom: '0.5px solid #f0efec', fontWeight: r.type === 'Total' ? 600 : 400 }}>
                     <td style={tdS}>{r.type}</td>
@@ -793,19 +887,21 @@ export default function Dashboard() {
                     <td style={tdS}>{fmt(r.wonVal)}</td>
                     <td style={tdS}>{fmt(r.lostVal)}</td>
                     <td style={{ ...tdS, color: r.srVal >= 0.25 ? '#16a34a' : r.srVal >= 0.15 ? '#ca8a04' : '#e63946', fontWeight: 500 }}>{r.srVal != null ? pct(r.srVal) : '—'}</td>
+                    <td style={tdS}>{r.type !== 'Total' ? (() => { const arr = r.type === 'Existing' ? closed.filter(d => d.customerType === 'Existing') : closed.filter(d => d.customerType !== 'Existing'); return arr.filter(d => d.projectStage === 'Variations' || d.stageName === 'Variations').length })() : closed.filter(d => d.projectStage === 'Variations' || d.stageName === 'Variations').length}</td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
             <div>
-              <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Trend — Strike rate (count %)</div>
-              {trendChart(monthData, 'count', '#2a78d6')}
+              <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Trend — Rolling 6-month strike rate (value %)</div>
+              {trendChart(rollingData, 'count', '#2a78d6')}
             </div>
           </div>
+
           <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>Detail</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['Title','Organisation','Customer type','Estimator','Decision date','Stage','Status','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
+              <thead><tr>{['Title','Organisation','Customer type','Estimator','Decision date','Project stage','Variation','System priced','Status','Value'].map(c => <th key={c} style={thS}>{c}</th>)}</tr></thead>
               <tbody>{closed.map(d => (
                 <tr key={d.id} style={{ background: d.status === 'won' ? '#f0fdf4' : '#fef2f2' }}>
                   <td style={tdS}>{d.title}</td>
@@ -814,6 +910,8 @@ export default function Dashboard() {
                   <td style={tdS}>{d.estimator || '—'}</td>
                   <td style={tdS}>{shortDate(d.closeTime)}</td>
                   <td style={tdS}>{d.projectStage || '—'}</td>
+                  <td style={tdS}>{d.projectStage === 'Variations' || d.stageName === 'Variations' ? <span style={{ color: '#2a78d6', fontSize: 11, fontWeight: 500 }}>Yes</span> : 'No'}</td>
+                  <td style={tdS}>{d.systemPriced || '—'}</td>
                   <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status]) + '22', color: STATUS_COLORS[d.status] }}>{d.status}</span></td>
                   <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
                 </tr>
