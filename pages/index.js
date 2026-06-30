@@ -831,9 +831,11 @@ export default function Dashboard() {
         return { month: monthLabel(m), count: parseFloat(srVal.toFixed(1)) }
       })
 
+      // Strike Rate uses different Existing definition: 2+ won projects = Existing, 1 won = Prospect
+      const srExisting = (d) => (d.wonCount || 0) >= 2
       const summaryRows = ['Existing','Prospect','Total'].map(type => {
         const isTotal = type === 'Total'
-        const arr = isTotal ? closed : closed.filter(d => type === 'Existing' ? d.customerType === 'Existing' : d.customerType !== 'Existing')
+        const arr = isTotal ? closed : closed.filter(d => type === 'Existing' ? srExisting(d) : !srExisting(d))
         const w = arr.filter(d => d.status === 'won')
         const l = arr.filter(d => d.status === 'lost')
         return { type, wonCount: w.length, lostCount: l.length, srCount: arr.length ? w.length/arr.length : null, wonVal: w.reduce((s,d)=>s+d.value,0), lostVal: l.reduce((s,d)=>s+d.value,0), srVal: arr.reduce((s,d)=>s+d.value,0) ? w.reduce((s,d)=>s+d.value,0)/arr.reduce((s,d)=>s+d.value,0) : null }
