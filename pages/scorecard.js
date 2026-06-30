@@ -90,18 +90,20 @@ const DEFAULT_TARGETS = {
   }
 }
 
-// Drill-down modal component
-function DrillModal({ title, projects, onClose }) {
+// Drill-down modal component — handles both deal objects and value change events
+function DrillModal({ title, projects, isValueChange, onClose }) {
   if (!projects || projects.length === 0) return null
   const tdS = { padding: '7px 10px', borderBottom: '0.5px solid #f0efec', fontSize: 12, verticalAlign: 'middle' }
   const thS = { padding: '8px 10px', fontWeight: 500, color: '#555', textAlign: 'left', fontSize: 12, borderBottom: '1px solid #e1e0d9', whiteSpace: 'nowrap' }
+  const fmtGBP = (n) => n == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n)
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1000, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 1100, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e1e0d9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
-            <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{projects.length} {isValueChange ? 'event' : 'project'}{projects.length !== 1 ? 's' : ''}</span>
           </div>
           <button onClick={onClose} style={{ fontSize: 18, border: 'none', background: 'none', cursor: 'pointer', color: '#888', lineHeight: 1 }}>×</button>
         </div>
@@ -109,24 +111,52 @@ function DrillModal({ title, projects, onClose }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
               <tr>
-                <th style={thS}>Project</th>
-                <th style={thS}>Organisation</th>
-                <th style={{ ...thS, textAlign: 'right' }}>Value</th>
-                <th style={thS}>Estimator</th>
-                <th style={thS}>Sales Person</th>
-                <th style={thS}>Stage</th>
-                <th style={thS}>Lead Source</th>
-                <th style={{ ...thS, textAlign: 'center' }}>Score</th>
-                <th style={thS}>Decision Date</th>
-                <th style={thS}>Status</th>
+                {isValueChange ? (
+                  <>
+                    <th style={thS}>Project</th>
+                    <th style={thS}>Organisation</th>
+                    <th style={thS}>Estimator</th>
+                    <th style={thS}>Stage</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>Previous Value</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>New Value</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>Change</th>
+                    <th style={thS}>Date</th>
+                  </>
+                ) : (
+                  <>
+                    <th style={thS}>Project</th>
+                    <th style={thS}>Organisation</th>
+                    <th style={{ ...thS, textAlign: 'right' }}>Value</th>
+                    <th style={thS}>Estimator</th>
+                    <th style={thS}>Sales Person</th>
+                    <th style={thS}>Stage</th>
+                    <th style={thS}>Lead Source</th>
+                    <th style={{ ...thS, textAlign: 'center' }}>Score</th>
+                    <th style={thS}>Decision Date</th>
+                    <th style={thS}>Status</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              {projects.map((d, i) => (
+              {isValueChange ? projects.map((v, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafaf9' }}>
+                  <td style={tdS}>{v.dealTitle || v.dealId || '—'}</td>
+                  <td style={tdS}>{v.orgName || '—'}</td>
+                  <td style={tdS}>{v.estimator || '—'}</td>
+                  <td style={tdS}>{v.stageName || '—'}</td>
+                  <td style={{ ...tdS, textAlign: 'right' }}>{fmtGBP(v.oldValue)}</td>
+                  <td style={{ ...tdS, textAlign: 'right', fontWeight: 500 }}>{fmtGBP(v.newValue)}</td>
+                  <td style={{ ...tdS, textAlign: 'right', color: (v.valueChange || 0) >= 0 ? '#16a34a' : '#e63946', fontWeight: 500 }}>
+                    {v.valueChange != null ? (v.valueChange >= 0 ? '+' : '') + fmtGBP(v.valueChange) : '—'}
+                  </td>
+                  <td style={tdS}>{v.changeDate ? new Date(v.changeDate).toLocaleDateString('en-GB') : '—'}</td>
+                </tr>
+              )) : projects.map((d, i) => (
                 <tr key={d.id || i} style={{ background: i % 2 === 0 ? '#fff' : '#fafaf9' }}>
                   <td style={tdS}>{d.title || '—'}</td>
                   <td style={tdS}>{d.orgName || d.organisation || '—'}</td>
-                  <td style={{ ...tdS, textAlign: 'right', fontWeight: 500 }}>{d.value ? new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(d.value) : '—'}</td>
+                  <td style={{ ...tdS, textAlign: 'right', fontWeight: 500 }}>{fmtGBP(d.value)}</td>
                   <td style={tdS}>{d.estimator || '—'}</td>
                   <td style={tdS}>{getSalesPerson(d) || '—'}</td>
                   <td style={tdS}>{d.stageName || '—'}</td>
@@ -262,9 +292,11 @@ export default function Scorecard() {
     const valuePricedExisting = existingChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
     const totalValuePriced = monthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
     const totalValueSecured = monthWon.reduce((s,d) => s+d.value, 0)
-    const dealsOver200kMonth = personDeals.filter(d => d.status === 'won' && d.over200k && monthKey(d.wonTime) === m).length
+    const dealsOver200kMonthList = personDeals.filter(d => d.status === 'won' && d.over200k && monthKey(d.wonTime) === m)
+    const dealsOver200kMonth = dealsOver200kMonthList.length
     const threeMonthsAgo = new Date(mEndDate.getFullYear(), mEndDate.getMonth() - 2, 1).toISOString().split('T')[0]
-    const dealsOver200kRolling3 = personDeals.filter(d => d.status === 'won' && d.over200k && d.wonTime >= threeMonthsAgo && d.wonTime <= mEnd).length
+    const dealsOver200kRolling3List = personDeals.filter(d => d.status === 'won' && d.over200k && d.wonTime >= threeMonthsAgo && d.wonTime <= mEnd)
+    const dealsOver200kRolling3 = dealsOver200kRolling3List.length
 
     return {
       strikeRateOverall, strikeRateMCSecured, valuePricedExisting, totalValuePriced,
@@ -274,13 +306,19 @@ export default function Scorecard() {
       _rolling6Projects: rolling6,
       _mcRollingProjects: mcRolling,
       _monthWonProjects: monthWon,
+      _dealsOver200kList: dealsOver200kMonthList,
     }
   }
 
   function getSalesMetrics(m) {
+    const mStart = m + '-01'
+    const mEndDate = new Date(new Date(mStart).getFullYear(), new Date(mStart).getMonth() + 1, 0)
+    const mEnd = mEndDate.toISOString().split('T')[0]
+    const sixMonthsAgo = new Date(mEndDate.getFullYear(), mEndDate.getMonth() - 5, 1).toISOString().split('T')[0]
+
     // Glenigan deals: current leadSource = Glenigan, date = receivedDate month
     const gleniganDeals = deals.filter(d => getLeadSource(d)?.toLowerCase().includes('glenigan'))
-    
+
     // #1 Glenigan received: entered Received stage in month m AND current lead source = Glenigan
     const gleniganReceivedProjects = gleniganDeals.filter(d => d.receivedDate && monthKey(d.receivedDate) === m)
     const gleniganReceived = gleniganReceivedProjects.length
@@ -296,34 +334,41 @@ export default function Scorecard() {
     })
     const gleniganScored5 = gleniganScored5Projects.length
 
-    // #5 Strike rate (value): all deals with a value decided in month m, all estimators
-    // Uses receivedDate for "received" deals — applies to all projects that have gone through pipeline
-    const allClosed = deals.filter(d => (d.status === 'won' || d.status === 'lost') && d.value > 0 && monthKey(d.closeTime) === m)
-    const allWon = allClosed.filter(d => d.status === 'won')
-    const strikeRateValue = allClosed.length
-      ? allWon.reduce((s,d)=>s+d.value,0) / allClosed.reduce((s,d)=>s+d.value,0)
+    // #5 Strike rate (value): rolling 6 months, all estimators, all decided deals with a value
+    const rolling6All = deals.filter(d =>
+      (d.status === 'won' || d.status === 'lost') && d.value > 0 &&
+      d.closeTime >= sixMonthsAgo && d.closeTime <= mEnd
+    )
+    const rolling6AllWon = rolling6All.filter(d => d.status === 'won')
+    const strikeRateValue = rolling6All.length
+      ? rolling6AllWon.reduce((s,d)=>s+d.value,0) / rolling6All.reduce((s,d)=>s+d.value,0)
       : null
 
-    // #6 Strike rate MC Secured/Negotiating: all estimators, only MC Secured + Negotiating stage deals decided in month m
-    const mcSecNegClosed = allClosed.filter(d => ['MC Secured','Negotiating'].includes(d.stageName))
-    const mcSecNegWon = mcSecNegClosed.filter(d => d.status === 'won')
-    const strikeRateMCSecNeg = mcSecNegClosed.length
-      ? mcSecNegWon.reduce((s,d)=>s+d.value,0) / mcSecNegClosed.reduce((s,d)=>s+d.value,0)
+    // #6 Strike rate MC Secured/Negotiating: rolling 6 months, all estimators, MC Secured + Negotiating only
+    const rolling6MC = rolling6All.filter(d => ['MC Secured','Negotiating'].includes(d.stageName))
+    const rolling6MCWon = rolling6MC.filter(d => d.status === 'won')
+    const strikeRateMCSecNeg = rolling6MC.length
+      ? rolling6MCWon.reduce((s,d)=>s+d.value,0) / rolling6MC.reduce((s,d)=>s+d.value,0)
       : null
 
     // #7 Total value of work priced: value changes across ALL estimators in month m
     const allMonthChanges = valueChanges.filter(v => v.changeDate && monthKey(v.changeDate) === m)
+    const allMonthChangesEnriched = allMonthChanges.map(v => {
+      const deal = deals.find(d => String(d.id) === v.dealId)
+      return { ...v, dealTitle: deal?.title || v.dealId, orgName: deal?.orgName || deal?.organisation || '—', estimator: deal?.estimator || '—', stageName: deal?.stageName || '—' }
+    })
     const totalValuePriced = allMonthChanges.reduce((s,v) => s + (v.valueChange || 0), 0)
 
     // #8 Projects priced >=200k: all estimators, value change where newValue >= 200k
-    const projectsPricedOver200kList = allMonthChanges.filter(v => (v.newValue || 0) >= 200000)
+    const projectsPricedOver200kList = allMonthChangesEnriched.filter(v => (v.newValue || 0) >= 200000)
     const projectsPricedOver200k = projectsPricedOver200kList.length
 
-    // #9 Total value secured: all estimators, won deals in month m
-    const totalValueSecured = allWon.reduce((s,d)=>s+d.value,0)
+    // #9 Total value secured: all estimators, won deals decided in month m
+    const allMonthWon = deals.filter(d => d.status === 'won' && d.value > 0 && monthKey(d.closeTime) === m)
+    const totalValueSecured = allMonthWon.reduce((s,d)=>s+d.value,0)
 
     // #10 Projects secured >=200k: all estimators, won deals in month m with value >= 200k
-    const projectsSecuredOver200kList = allWon.filter(d => d.value >= 200000)
+    const projectsSecuredOver200kList = allMonthWon.filter(d => d.value >= 200000)
     const projectsSecuredOver200k = projectsSecuredOver200kList.length
 
     return {
@@ -331,13 +376,15 @@ export default function Scorecard() {
       strikeRateValue, strikeRateMCSecNeg,
       totalValuePriced, projectsPricedOver200k,
       totalValueSecured, projectsSecuredOver200k,
-      // drill-down project sets
+      // drill-down sets
       _gleniganReceivedProjects: gleniganReceivedProjects,
       _gleniganPricedProjects: gleniganPricedProjects,
       _gleniganScored5Projects: gleniganScored5Projects,
-      _allClosedProjects: allClosed,
-      _mcSecNegClosedProjects: mcSecNegClosed,
-      _allWonProjects: allWon,
+      _rolling6AllProjects: rolling6All,
+      _rolling6MCProjects: rolling6MC,
+      _allMonthChanges: allMonthChangesEnriched,
+      _projectsPricedOver200kList: projectsPricedOver200kList,
+      _allWonProjects: allMonthWon,
       _projectsSecuredOver200kList: projectsSecuredOver200kList,
     }
   }
@@ -350,7 +397,7 @@ export default function Scorecard() {
     { key: 'valuePricedExisting', label: 'Value priced — existing customers', format: fmt, targetKey: 'valuePricedExisting' },
     { key: 'totalValuePriced', label: 'Total value of work priced', sub: 'Value change data', format: fmt, targetKey: 'totalValuePriced' },
     { key: 'totalValueSecured', label: 'Total value of work secured', format: fmt, targetKey: 'totalValueSecured', drillKey: '_monthWonProjects' },
-    { key: 'dealsSecuredOver200k', label: 'Deals secured ≥£200K', sub: 'Per month, target 1/quarter', format: v => v, targetKey: 'dealsSecuredOver200k', mode: 'binary', useRolling3: true },
+    { key: 'dealsSecuredOver200k', label: 'Deals secured ≥£200K', sub: 'Per month, target 1/quarter', format: v => v, targetKey: 'dealsSecuredOver200k', mode: 'binary', useRolling3: true, drillKey: '_dealsOver200kList' },
     { key: 'gpMargin', label: 'GP margin — own projects', sub: 'Coming soon — Xero integration', format: () => '—', targetKey: 'gpMargin' },
   ]
 
@@ -358,10 +405,10 @@ export default function Scorecard() {
     { key: 'gleniganReceived', label: 'Glenigan enquiries received', format: v => v, targetKey: 'gleniganReceived', drillKey: '_gleniganReceivedProjects' },
     { key: 'gleniganPriced', label: 'Glenigan enquiries priced', format: v => v, targetKey: 'gleniganPriced', drillKey: '_gleniganPricedProjects' },
     { key: 'gleniganScored5', label: 'Glenigan scored ≥5', format: v => v, targetKey: 'gleniganScored5', drillKey: '_gleniganScored5Projects' },
-    { key: 'strikeRateValue', label: 'Strike rate (value) — all estimators', format: pct, targetKey: 'strikeRateValue', drillKey: '_allClosedProjects' },
-    { key: 'strikeRateMCSecNeg', label: 'Strike rate — MC Secured/Negotiating', sub: 'All estimators', format: pct, targetKey: 'strikeRateMCSecNeg', drillKey: '_mcSecNegClosedProjects' },
-    { key: 'totalValuePriced', label: 'Total value of work priced', sub: 'All estimators', format: fmt, targetKey: 'totalValuePriced' },
-    { key: 'projectsPricedOver200k', label: 'Projects priced ≥£200K', sub: 'All estimators', format: v => v, targetKey: 'projectsPricedOver200k' },
+    { key: 'strikeRateValue', label: 'Strike rate (value) — all estimators', sub: 'Rolling 6 months', format: pct, targetKey: 'strikeRateValue', drillKey: '_rolling6AllProjects' },
+    { key: 'strikeRateMCSecNeg', label: 'Strike rate — MC Secured/Negotiating', sub: 'Rolling 6 months, all estimators', format: pct, targetKey: 'strikeRateMCSecNeg', drillKey: '_rolling6MCProjects' },
+    { key: 'totalValuePriced', label: 'Total value of work priced', sub: 'All estimators, value change data', format: fmt, targetKey: 'totalValuePriced', drillKey: '_allMonthChanges', isValueChange: true },
+    { key: 'projectsPricedOver200k', label: 'Projects priced ≥£200K', sub: 'All estimators', format: v => v, targetKey: 'projectsPricedOver200k', drillKey: '_projectsPricedOver200kList', isValueChange: true },
     { key: 'totalValueSecured', label: 'Total value of work secured', sub: 'All estimators', format: fmt, targetKey: 'totalValueSecured', drillKey: '_allWonProjects' },
     { key: 'projectsSecuredOver200k', label: 'Projects secured ≥£200K', sub: 'All estimators', format: v => v, targetKey: 'projectsSecuredOver200k', drillKey: '_projectsSecuredOver200kList' },
   ]
@@ -387,7 +434,7 @@ export default function Scorecard() {
     if (!m.drillKey) return
     const projects = metrics[m.drillKey] || []
     if (projects.length === 0) return
-    setModal({ title: `${m.label} — ${monthLabel(monthStr)}`, projects })
+    setModal({ title: `${m.label} — ${monthLabel(monthStr)}`, projects, isValueChange: !!m.isValueChange })
   }
 
   function renderCard(m, metrics, label, withGraph, monthStr) {
@@ -465,7 +512,7 @@ export default function Scorecard() {
     <>
       <Head><title>Rock Roofing — Scorecards</title></Head>
       <div style={{ ...s, minHeight: '100vh', background: '#fafaf9' }}>
-        {modal && <DrillModal title={modal.title} projects={modal.projects} onClose={() => setModal(null)} />}
+        {modal && <DrillModal title={modal.title} projects={modal.projects} isValueChange={modal.isValueChange} onClose={() => setModal(null)} />}
 
         <div style={{ background: '#1a1a19', padding: '0 24px', display: 'flex', alignItems: 'center', gap: 8, height: 52 }}>
           <img src="/rock-logo.jpg" alt="Rock Roofing" style={{ height: 32, width: 32, borderRadius: 4 }} />
