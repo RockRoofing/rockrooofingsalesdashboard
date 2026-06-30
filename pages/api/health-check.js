@@ -21,7 +21,7 @@ export default async function handler(req, res) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'alerts@rockroofingsalesdashboard.vercel.app',
+            from: 'Rock Roofing Sales Dashboard <onboarding@resend.dev>',
             to: ALERT_EMAIL,
             subject: '⚠️ Rock Roofing Dashboard — Sync Alert',
             html: `<p>The Pipedrive sync hasn't run in over 25 hours.</p><p>Last sync: ${lastSync || 'never'}</p><p>Please check the dashboard and Vercel logs.</p>`
