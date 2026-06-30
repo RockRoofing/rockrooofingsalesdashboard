@@ -147,19 +147,31 @@ export default function Dashboard() {
     })
   }
 
+  const matchFilter = (val, filter) => {
+    if (filter === 'All') return true
+    if (filter === 'Blank') return !val || val === ''
+    return val === filter || (val && val.includes && val.includes(filter))
+  }
+
   const applyFilters = (arr) => arr.filter(d => {
-    if (filters.customerType !== 'All' && d.customerType !== filters.customerType) return false
-    if (filters.estimator !== 'All' && d.estimator !== filters.estimator) return false
-    if (filters.projectStage !== 'All' && d.projectStage !== filters.projectStage) return false
-    if (filters.salesPerson !== 'All' && d.salesPerson !== filters.salesPerson) return false
-    if (filters.leadSource !== 'All' && d.leadSource !== filters.leadSource) return false
-    if (filters.variation !== 'All' && d.variation !== filters.variation) return false
-    if (filters.status !== 'All' && d.status !== filters.status) return false
-    if (filters.region !== 'All' && d.region !== filters.region) return false
+    if (!matchFilter(d.customerType, filters.customerType)) return false
+    if (!matchFilter(d.estimator, filters.estimator)) return false
+    if (!matchFilter(d.salesPerson, filters.salesPerson)) return false
+    if (!matchFilter(d.leadSource, filters.leadSource)) return false
+    if (!matchFilter(d.status, filters.status)) return false
+    if (!matchFilter(d.region, filters.region)) return false
     return true
   })
 
-  const uniq = (arr, key) => ['All', ...new Set(arr.map(d => d[key]).filter(Boolean).flatMap(v => v.includes(',') ? v.split(',').map(s => s.trim()) : [v]))].sort()
+  const uniq = (arr, key) => {
+    const noSplit = ['customerType', 'estimator', 'salesPerson', 'organizationName', 'region', 'status', 'projectType']
+    const vals = arr.map(d => d[key])
+    const unique = noSplit.includes(key)
+      ? ['All', 'Blank', ...new Set(vals.filter(Boolean))].sort()
+      : ['All', 'Blank', ...new Set(vals.filter(Boolean).flatMap(v => v.includes(',') ? v.split(',').map(s => s.trim()) : [v]))].sort()
+    return unique
+  }
+  
 
   // Styles
   const s = { fontFamily: 'system-ui,-apple-system,sans-serif', fontSize: 14, color: '#1a1a19' }
@@ -770,9 +782,9 @@ export default function Dashboard() {
         // Use projectStage as proxy for where deal was in process
         // If nothing selected, show all decided deals (no stage restriction - let user filter)
         
-        // Multi-select project stage filter
+        // Multi-select pipeline stage filter — uses stageName (pipeline stage at decision)
         if (srStages.length > 0) {
-          if (!srStages.includes(d.projectStage)) return false
+          if (!srStages.includes(d.stageName)) return false
         }
         // System priced filter
         if (srSystemPriced !== 'All' && !d.systemPriced?.includes(srSystemPriced)) return false
@@ -807,7 +819,7 @@ export default function Dashboard() {
         const sixMonthKeys = srMonths.slice(Math.max(0, idx - 5), idx + 1)
         // Use ALL filtered closed deals for rolling calc (not just within date range)
         const allClosed = baseFiltered.filter(d => {
-          if (srStages.length > 0 && !srStages.includes(d.projectStage)) return false
+          if (srStages.length > 0 && !srStages.includes(d.stageName)) return false
           if (srSystemPriced !== 'All' && !d.systemPriced?.includes(srSystemPriced)) return false
           if (srValueMin && d.value < parseFloat(srValueMin)) return false
           if (srValueMax && d.value > parseFloat(srValueMax)) return false
@@ -908,7 +920,7 @@ export default function Dashboard() {
                     <td style={tdS}>{fmt(r.wonVal)}</td>
                     <td style={tdS}>{fmt(r.lostVal)}</td>
                     <td style={{ ...tdS, color: r.srVal >= 0.25 ? '#16a34a' : r.srVal >= 0.15 ? '#ca8a04' : '#e63946', fontWeight: 500 }}>{r.srVal != null ? pct(r.srVal) : '—'}</td>
-                    <td style={tdS}>{r.type !== 'Total' ? (() => { const arr = r.type === 'Existing' ? closed.filter(d => d.customerType === 'Existing') : closed.filter(d => d.customerType !== 'Existing'); return arr.filter(d => d.projectStage === 'Variations' || d.stageName === 'Variations').length })() : closed.filter(d => d.projectStage === 'Variations' || d.stageName === 'Variations').length}</td>
+                    <td style={tdS}>{r.type !== 'Total' ? (() => { const arr = r.type === 'Existing' ? closed.filter(d => d.customerType === 'Existing') : closed.filter(d => d.customerType !== 'Existing'); return arr.filter(d => d.stageName === 'Variations').length })() : closed.filter(d => d.stageName === 'Variations').length}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -930,8 +942,8 @@ export default function Dashboard() {
                   <td style={tdS}>{d.customerType || '—'}</td>
                   <td style={tdS}>{d.estimator || '—'}</td>
                   <td style={tdS}>{shortDate(d.closeTime)}</td>
-                  <td style={tdS}>{d.projectStage || '—'}</td>
-                  <td style={tdS}>{d.projectStage === 'Variations' ? <span style={{ color: '#2a78d6', fontSize: 11, fontWeight: 500 }}>Yes</span> : 'No'}</td>
+                  <td style={tdS}>{d.stageName || '—'}</td>
+                  <td style={tdS}>{d.stageName === 'Variations' ? <span style={{ color: '#2a78d6', fontSize: 11, fontWeight: 500 }}>Yes</span> : 'No'}</td>
                   <td style={tdS}>{d.systemPriced || '—'}</td>
                   <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status]) + '22', color: STATUS_COLORS[d.status] }}>{d.status}</span></td>
                   <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
