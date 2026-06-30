@@ -190,7 +190,6 @@ export default function Dashboard() {
         {[
           { label: 'Customer type', key: 'customerType', opts: uniq(deals, 'customerType') },
           { label: 'Estimator', key: 'estimator', opts: uniq(deals, 'estimator') },
-          { label: 'Stage', key: 'projectStage', opts: uniq(deals, 'projectStage') },
           { label: 'Status', key: 'status', opts: ['All','won','lost','open'] },
           { label: 'Lead source', key: 'leadSource', opts: uniq(deals, 'leadSource') },
           { label: 'Region', key: 'region', opts: uniq(deals, 'region') },
@@ -215,6 +214,16 @@ export default function Dashboard() {
           </select>
         </div>
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        <div>
+          <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Project stage</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {['Received','Stage 1','Stage 2','Review','MC Unsecured - Not Priced','MC Unsecured','MC Secured','Negotiating','Variations'].map(stg => (
+              <button key={stg} onClick={() => setGlobalStages(prev => prev.includes(stg) ? prev.filter(x => x !== stg) : [...prev, stg])} style={{ fontSize: 11, padding: '3px 8px', border: '0.5px solid #d0d0cc', borderRadius: 4, background: globalStages.includes(stg) ? '#1a1a19' : '#fff', color: globalStages.includes(stg) ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{stg}</button>
+            ))}
+          </div>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Project score</label>
@@ -232,7 +241,7 @@ export default function Dashboard() {
           <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
         </div>
-        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', projectStage:'All', salesPerson:'All', leadSource:'All', variation:'All', status:'All', region:'All' }); const _r = new Date(); const _rf = new Date(_r.getFullYear()-1, _r.getMonth(), _r.getDate()); setDateFrom(_rf.toISOString().split('T')[0]); setDateTo(_r.toISOString().split('T')[0]); setDrCustName('All'); setDrSalesPerson('All'); setTrLabelFilter('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+        <button onClick={() => { setFilters({ customerType:'All', estimator:'All', salesPerson:'All', leadSource:'All', status:'All', region:'All' }); setGlobalStages([]); const _r = new Date(); const _rf = new Date(_r.getFullYear()-1, _r.getMonth(), _r.getDate()); setDateFrom(_rf.toISOString().split('T')[0]); setDateTo(_r.toISOString().split('T')[0]); setDrCustName('All'); setDrSalesPerson('All'); setTrLabelFilter('All') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
       </div>
     </div>
   )
