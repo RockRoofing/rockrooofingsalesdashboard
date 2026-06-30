@@ -168,8 +168,8 @@ export default function Scorecard() {
     const rolling6Won = rolling6.filter(d => d.status === 'won')
     const strikeRateOverall = rolling6.length ? rolling6Won.reduce((s,d)=>s+d.value,0) / rolling6.reduce((s,d)=>s+d.value,0) : null
 
-    // MC Secured/Negotiating strike rate (rolling 6 months, by projectStage)
-    const mcRolling = rolling6.filter(d => ['MC Secured','Negotiating'].includes(d.projectStage))
+    // MC Secured/Negotiating strike rate (rolling 6 months, by pipeline stage at decision)
+    const mcRolling = rolling6.filter(d => ['MC Secured','Negotiating'].includes(d.stageName))
     const mcRollingWon = mcRolling.filter(d => d.status === 'won')
     const strikeRateMCSecured = mcRolling.length ? mcRollingWon.reduce((s,d)=>s+d.value,0) / mcRolling.reduce((s,d)=>s+d.value,0) : null
 
@@ -273,7 +273,7 @@ export default function Scorecard() {
   const lastFullMonthMetrics = getMetrics(lastFullMonth)
   const currentMonthMetrics = getMetrics(currentMonth)
 
-  function renderCard(m, metrics, label) {
+  function renderCard(m, metrics, label, withGraph) {
     const actual = metrics[m.key]
     const target = t[m.targetKey]
     const useRolling = m.useRolling3 ? metrics.dealsSecuredOver200kRolling3 : actual
@@ -281,9 +281,10 @@ export default function Scorecard() {
     const isEditing = editingTarget === `${label}-${m.key}`
 
     const trendData = allMonthMetrics.map(mm => ({ month: monthLabel(mm.month), value: mm[m.key] }))
+    const dotSize = withGraph ? 16 : 24
 
     return (
-      <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: '160px 1fr', gap: 16, alignItems: 'center' }}>
+      <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr', gap: 16, alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 11, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>{m.label}{m.sub && <div style={{ color: '#bbb', fontSize: 10 }}>({m.sub})</div>}</div>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#1a1a19', marginBottom: 4 }}>{actual != null ? m.format(actual) : '—'}</div>
@@ -298,21 +299,23 @@ export default function Scorecard() {
                 Target: {targetDisplay(m.targetKey)} <span style={{ fontSize: 10 }}>✎</span>
               </div>
             )}
-            <span style={{ color, fontSize: 16 }}>●</span>
+            <span style={{ color, fontSize: dotSize }}>●</span>
           </div>
         </div>
-        <div style={{ height: 70 }}>
-          {actual != null && (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-                <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#bbb' }} interval="preserveStartEnd" />
-                <YAxis hide domain={['auto','auto']} />
-                <Tooltip formatter={(v) => m.format(v)} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="value" stroke="#2a78d6" strokeWidth={2} dot={{ r: 2 }} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+        {withGraph && (
+          <div style={{ height: 70 }}>
+            {actual != null && (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#bbb' }} interval="preserveStartEnd" />
+                  <YAxis hide domain={['auto','auto']} />
+                  <Tooltip formatter={(v) => m.format(v)} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="value" stroke="#2a78d6" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -361,20 +364,25 @@ export default function Scorecard() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{person}</span>
-                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Last full month: {monthLabel(lastFullMonth)}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
-                {metricDefs.map(m => renderCard(m, lastFullMonthMetrics, 'last'))}
-              </div>
-
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{person}</span>
-                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Current month tracking: {monthLabel(currentMonth)} (in progress)</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
-                {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current'))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{person}</span>
+                    <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Last full month: {monthLabel(lastFullMonth)}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {metricDefs.map(m => renderCard(m, lastFullMonthMetrics, 'last', true))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{person}</span>
+                    <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Current month tracking: {monthLabel(currentMonth)} (in progress)</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', false))}
+                  </div>
+                </div>
               </div>
 
               <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 12 }}>Trend — {monthLabel(displayMonths[0])} to {monthLabel(displayMonths[displayMonths.length-1])}</div>
