@@ -36,7 +36,7 @@ function rag(actual, target, mode = 'normal') {
   if (mode === 'binary') return actual > 0 ? '#16a34a' : '#e63946'
   const ratio = actual / target
   if (ratio >= 1) return '#16a34a'
-  if (ratio >= 0.75) return '#ca8a04'
+  if (ratio >= 0.85) return '#ca8a04'
   return '#e63946'
 }
 
@@ -308,22 +308,22 @@ export default function Scorecard() {
     const trendData = allMonthMetrics.map(mm => ({ month: monthLabel(mm.month), value: mm[m.key] }))
     const trendlineValues = computeTrendline(trendData)
     const chartData = trendData.map((d, i) => ({ ...d, trend: trendlineValues[i] }))
-    const dotSize = withGraph ? 48 : 72
+    const dotSize = 48
 
     return (
       <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr', gap: 16, alignItems: 'center', height: CARD_HEIGHT, boxSizing: 'border-box' }}>
-        <div>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>{m.label}{m.sub && <div style={{ color: '#bbb', fontSize: 10 }}>({m.sub})</div>}</div>
-          <div style={{ fontSize: 22, fontWeight: 600, color: '#1a1a19', marginBottom: 4 }}>{actual != null ? m.format(actual) : '—'}</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: dotSize }}>
+        <div style={!withGraph ? { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' } : undefined}>
+          <div style={{ fontSize: 14, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>{m.label}{m.sub && <div style={{ color: '#bbb', fontSize: 13 }}>({m.sub})</div>}</div>
+          <div style={{ fontSize: 29, fontWeight: 600, color: '#1a1a19', marginBottom: 4 }}>{actual != null ? m.format(actual) : '—'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: withGraph ? 'space-between' : 'center', gap: withGraph ? 0 : 16, minHeight: dotSize, width: '100%' }}>
             {isEditing ? (
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} style={{ width: 70, fontSize: 12, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(m.key, editValue, type); if (e.key === 'Escape') setEditingTarget(null) }} />
-                <button onClick={() => saveTarget(m.key, editValue, type)} style={{ fontSize: 11, padding: '2px 6px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
+                <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} style={{ width: 70, fontSize: 16, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(m.key, editValue, type); if (e.key === 'Escape') setEditingTarget(null) }} />
+                <button onClick={() => saveTarget(m.key, editValue, type)} style={{ fontSize: 14, padding: '2px 6px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: '#888', cursor: 'pointer' }} onClick={() => { setEditingTarget(`${label}-${m.key}`); setEditValue(String(t[m.targetKey] || '')) }}>
-                Target: {targetDisplay(m.targetKey)} <span style={{ fontSize: 13 }}>✎</span>
+              <div style={{ fontSize: 17, color: '#888', cursor: 'pointer' }} onClick={() => { setEditingTarget(`${label}-${m.key}`); setEditValue(String(t[m.targetKey] || '')) }}>
+                Target: {targetDisplay(m.targetKey)} <span style={{ fontSize: 17 }}>✎</span>
               </div>
             )}
             <span style={{ color, fontSize: dotSize, lineHeight: 1 }}>●</span>
@@ -387,12 +387,12 @@ export default function Scorecard() {
                 <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#888', alignItems: 'center' }}>
                   <span style={{ fontWeight: 500 }}>Key:</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#16a34a', fontSize: 36, lineHeight: 1 }}>●</span> On target</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ca8a04', fontSize: 36, lineHeight: 1 }}>●</span> Close (≥75%)</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#ca8a04', fontSize: 36, lineHeight: 1 }}>●</span> Close (≥85%)</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#e63946', fontSize: 36, lineHeight: 1 }}>●</span> Below target</span>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 24, marginBottom: 32 }}>
                 <div>
                   <div style={{ marginBottom: 8 }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{person}</span>
