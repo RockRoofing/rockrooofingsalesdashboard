@@ -263,7 +263,7 @@ export default function Scorecard() {
     { key: 'totalValuePriced', label: 'Total value of work priced', sub: 'Value change data', format: fmt, targetKey: 'totalValuePriced' },
     { key: 'totalValueSecured', label: 'Total value of work secured', format: fmt, targetKey: 'totalValueSecured' },
     { key: 'dealsSecuredOver200k', label: 'Deals secured ≥£200K', sub: 'Per month, target 1/quarter', format: v => v, targetKey: 'dealsSecuredOver200k', mode: 'binary', useRolling3: true },
-    { key: 'gpMargin', label: 'Company-wide GP margin', sub: 'Coming soon — Xero integration', format: () => '—', targetKey: 'gpMargin' },
+    { key: 'gpMargin', label: 'GP margin — own projects', sub: 'Coming soon — Xero integration', format: () => '—', targetKey: 'gpMargin' },
   ]
 
   const salesMetricDefs = [
