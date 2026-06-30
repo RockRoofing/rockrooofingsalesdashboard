@@ -77,7 +77,6 @@ export default function Dashboard() {
   const [ppStages, setPpStages] = useState([])
   const [ppFilters, setPpFilters] = useState({ customerType: 'All', estimator: 'All', salesPerson: 'All', status: 'All', leadSource: 'All', region: 'All', custName: 'All', systemPriced: 'All' })
   const [trLabelFilter, setTrLabelFilter] = useState('All') // 'All', 'gte5', 'lt5'
-  const [srVariation, setSrVariation] = useState('All') // 'All', 'Variations', 'Projects'
   const [srStages, setSrStages] = useState([])
   const [srSystemPriced, setSrSystemPriced] = useState('All')
   const [srValueMin, setSrValueMin] = useState('')
@@ -759,15 +758,22 @@ export default function Dashboard() {
     'Strike Rate': () => {
       const RECEIVED_ONWARDS = ['Received','Stage 1','Stage 2','Review','MC Unsecured - Not Priced','MC Unsecured','MC Secured','Negotiating']
       
+      // Stage 2 onwards pipeline stages
+      const STAGE2_ONWARDS = ['Stage 2','Review','MC Unsecured - Not Priced','MC Unsecured','MC Secured','Negotiating','Variations']
+      
       const baseFiltered = applyFilters(filterDealsByDate(deals.filter(d => d.status === 'won' || d.status === 'lost'), 'closeTime'))
       
       const closed = baseFiltered.filter(d => {
-        // Variation filter
-        const isVariation = d.stageName === 'Variations' || d.projectStage === 'Variations'
-        if (srVariation === 'Variations' && !isVariation) return false
-        if (srVariation === 'Projects' && isVariation) return false
-        // Project Stage multi-select
-        if (srStages.length > 0 && !srStages.includes(d.projectStage)) return false
+        // Default: only deals decided from Stage 2 onwards (using projectStage custom field)
+        // projectStage values: MC Unsecured, MC Secured, Negotiating, Variations, Contractor tendering, Live Project, End User
+        // Pipeline stage at decision is in stageName but won/lost deals show blank stageName
+        // Use projectStage as proxy for where deal was in process
+        // If nothing selected, show all decided deals (no stage restriction - let user filter)
+        
+        // Multi-select project stage filter
+        if (srStages.length > 0) {
+          if (!srStages.includes(d.projectStage)) return false
+        }
         // System priced filter
         if (srSystemPriced !== 'All' && !d.systemPriced?.includes(srSystemPriced)) return false
         // Value range
@@ -781,14 +787,36 @@ export default function Dashboard() {
       const srValue = closed.length ? won.reduce((s,d)=>s+d.value,0) / closed.reduce((s,d)=>s+d.value,0) : null
       const srCount = closed.length ? won.length / closed.length : null
 
-      // Rolling 6-month trendline
-      const rollingData = last12.map((m, idx) => {
-        // Get last 6 months up to and including this month
-        const sixMonthKeys = last12.slice(Math.max(0, idx - 5), idx + 1)
-        const periodClosed = closed.filter(d => sixMonthKeys.includes(monthKey(d.closeTime)))
+      // Rolling 6-month trendline using filtered deals
+      // Build month range from date filter
+      function srGetMonths(from, to) {
+        const months = []
+        if (!from || !to) return last12
+        const [fy, fm] = from.substring(0,7).split('-').map(Number)
+        const [ty, tm] = to.substring(0,7).split('-').map(Number)
+        let y = fy, m = fm
+        while (y < ty || (y === ty && m <= tm)) {
+          months.push(`${y}-${String(m).padStart(2,'0')}`)
+          m++; if (m > 12) { m = 1; y++ }
+        }
+        return months
+      }
+      const srMonths = srGetMonths(dateFrom, dateTo)
+      const rollingData = srMonths.map((m, idx) => {
+        // Rolling 6 months up to and including this month
+        const sixMonthKeys = srMonths.slice(Math.max(0, idx - 5), idx + 1)
+        // Use ALL filtered closed deals for rolling calc (not just within date range)
+        const allClosed = baseFiltered.filter(d => {
+          if (srStages.length > 0 && !srStages.includes(d.projectStage)) return false
+          if (srSystemPriced !== 'All' && !d.systemPriced?.includes(srSystemPriced)) return false
+          if (srValueMin && d.value < parseFloat(srValueMin)) return false
+          if (srValueMax && d.value > parseFloat(srValueMax)) return false
+          return true
+        })
+        const periodClosed = allClosed.filter(d => sixMonthKeys.includes(monthKey(d.closeTime)))
         const periodWon = periodClosed.filter(d => d.status === 'won')
         const srVal = periodClosed.length ? periodWon.reduce((s,d)=>s+d.value,0) / periodClosed.reduce((s,d)=>s+d.value,0) * 100 : 0
-        return { month: monthLabel(m), count: srVal }
+        return { month: monthLabel(m), count: parseFloat(srVal.toFixed(1)) }
       })
 
       const summaryRows = ['Existing','Prospect','Total'].map(type => {
@@ -826,14 +854,7 @@ export default function Dashboard() {
                   {systemPricedOpts.map(o => <option key={o}>{o}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Type</label>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {['All','Projects','Variations'].map(v => (
-                    <button key={v} onClick={() => setSrVariation(v)} style={{ fontSize: 12, padding: '4px 8px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: srVariation === v ? '#1a1a19' : '#fff', color: srVariation === v ? '#fff' : '#555', cursor: 'pointer', fontFamily: 'inherit' }}>{v}</button>
-                  ))}
-                </div>
-              </div>
+
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
               <div>
@@ -862,7 +883,7 @@ export default function Dashboard() {
                 <label style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>To</label>
                 <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ fontSize: 12, padding: '4px 6px', border: '0.5px solid #d0d0cc', borderRadius: 6, fontFamily: 'inherit' }} />
               </div>
-              <button onClick={() => { setFilters(f => ({...f, customerType:'All', estimator:'All', leadSource:'All', region:'All'})); setSrVariation('All'); setSrStages([]); setSrSystemPriced('All'); setSrValueMin(''); setSrValueMax('') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
+              <button onClick={() => { setFilters(f => ({...f, customerType:'All', estimator:'All', leadSource:'All', region:'All'})); setSrStages([]); setSrSystemPriced('All'); setSrValueMin(''); setSrValueMax('') }} style={{ fontSize: 12, padding: '4px 10px', border: '0.5px solid #d0d0cc', borderRadius: 6, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Reset</button>
             </div>
           </div>
 
@@ -910,7 +931,7 @@ export default function Dashboard() {
                   <td style={tdS}>{d.estimator || '—'}</td>
                   <td style={tdS}>{shortDate(d.closeTime)}</td>
                   <td style={tdS}>{d.projectStage || '—'}</td>
-                  <td style={tdS}>{d.projectStage === 'Variations' || d.stageName === 'Variations' ? <span style={{ color: '#2a78d6', fontSize: 11, fontWeight: 500 }}>Yes</span> : 'No'}</td>
+                  <td style={tdS}>{d.projectStage === 'Variations' ? <span style={{ color: '#2a78d6', fontSize: 11, fontWeight: 500 }}>Yes</span> : 'No'}</td>
                   <td style={tdS}>{d.systemPriced || '—'}</td>
                   <td style={tdS}><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, background: (STATUS_COLORS[d.status]) + '22', color: STATUS_COLORS[d.status] }}>{d.status}</span></td>
                   <td style={{ ...tdS, textAlign: 'right' }}>{fmt(d.value)}</td>
