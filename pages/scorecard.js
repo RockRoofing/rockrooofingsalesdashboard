@@ -40,6 +40,28 @@ function rag(actual, target, mode = 'normal') {
   return '#e63946'
 }
 
+// Simple linear regression trendline over numeric (index, value) pairs
+function computeTrendline(data) {
+  const points = data
+    .map((d, i) => ({ i, value: d.value }))
+    .filter(d => d.value != null && !isNaN(d.value))
+  if (points.length < 2) return data.map(() => null)
+
+  const n = points.length
+  const sumX = points.reduce((s, p) => s + p.i, 0)
+  const sumY = points.reduce((s, p) => s + p.value, 0)
+  const sumXY = points.reduce((s, p) => s + p.i * p.value, 0)
+  const sumX2 = points.reduce((s, p) => s + p.i * p.i, 0)
+
+  const denom = (n * sumX2 - sumX * sumX)
+  if (denom === 0) return data.map(() => null)
+
+  const slope = (n * sumXY - sumX * sumY) / denom
+  const intercept = (sumY - slope * sumX) / n
+
+  return data.map((_, i) => slope * i + intercept)
+}
+
 const DEFAULT_TARGETS = {
   estimator: {
     strikeRateOverall: 0.25,
@@ -273,6 +295,9 @@ export default function Scorecard() {
   const lastFullMonthMetrics = getMetrics(lastFullMonth)
   const currentMonthMetrics = getMetrics(currentMonth)
 
+  // Fixed card height so both columns line up horizontally regardless of whether a graph is present
+  const CARD_HEIGHT = 132
+
   function renderCard(m, metrics, label, withGraph) {
     const actual = metrics[m.key]
     const target = t[m.targetKey]
@@ -281,10 +306,12 @@ export default function Scorecard() {
     const isEditing = editingTarget === `${label}-${m.key}`
 
     const trendData = allMonthMetrics.map(mm => ({ month: monthLabel(mm.month), value: mm[m.key] }))
-    const dotSize = withGraph ? 16 : 24
+    const trendlineValues = computeTrendline(trendData)
+    const chartData = trendData.map((d, i) => ({ ...d, trend: trendlineValues[i] }))
+    const dotSize = withGraph ? 28 : 36
 
     return (
-      <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr', gap: 16, alignItems: 'center' }}>
+      <div key={m.key} style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid #e1e0d9`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'grid', gridTemplateColumns: withGraph ? '160px 1fr' : '1fr', gap: 16, alignItems: 'center', height: CARD_HEIGHT, boxSizing: 'border-box' }}>
         <div>
           <div style={{ fontSize: 11, color: '#888', marginBottom: 6, lineHeight: 1.3 }}>{m.label}{m.sub && <div style={{ color: '#bbb', fontSize: 10 }}>({m.sub})</div>}</div>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#1a1a19', marginBottom: 4 }}>{actual != null ? m.format(actual) : '—'}</div>
@@ -295,22 +322,23 @@ export default function Scorecard() {
                 <button onClick={() => saveTarget(m.key, editValue, type)} style={{ fontSize: 11, padding: '2px 6px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: '#aaa', cursor: 'pointer' }} onClick={() => { setEditingTarget(`${label}-${m.key}`); setEditValue(String(t[m.targetKey] || '')) }}>
-                Target: {targetDisplay(m.targetKey)} <span style={{ fontSize: 10 }}>✎</span>
+              <div style={{ fontSize: 13, color: '#888', cursor: 'pointer' }} onClick={() => { setEditingTarget(`${label}-${m.key}`); setEditValue(String(t[m.targetKey] || '')) }}>
+                Target: {targetDisplay(m.targetKey)} <span style={{ fontSize: 13 }}>✎</span>
               </div>
             )}
-            <span style={{ color, fontSize: dotSize }}>●</span>
+            <span style={{ color, fontSize: dotSize, lineHeight: 1 }}>●</span>
           </div>
         </div>
         {withGraph && (
-          <div style={{ height: 70 }}>
+          <div style={{ height: CARD_HEIGHT - 28 }}>
             {actual != null && (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                   <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#bbb' }} interval="preserveStartEnd" />
                   <YAxis hide domain={['auto','auto']} />
                   <Tooltip formatter={(v) => m.format(v)} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
                   <Line type="monotone" dataKey="value" stroke="#2a78d6" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+                  <Line type="linear" dataKey="trend" stroke="#bbb" strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -358,9 +386,9 @@ export default function Scorecard() {
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#888', alignItems: 'center' }}>
                   <span style={{ fontWeight: 500 }}>Key:</span>
-                  <span><span style={{ color: '#16a34a' }}>●</span> On target</span>
-                  <span><span style={{ color: '#ca8a04' }}>●</span> Close (≥75%)</span>
-                  <span><span style={{ color: '#e63946' }}>●</span> Below target</span>
+                  <span><span style={{ color: '#16a34a', fontSize: 20 }}>●</span> On target</span>
+                  <span><span style={{ color: '#ca8a04', fontSize: 20 }}>●</span> Close (≥75%)</span>
+                  <span><span style={{ color: '#e63946', fontSize: 20 }}>●</span> Below target</span>
                 </div>
               </div>
 
@@ -380,7 +408,7 @@ export default function Scorecard() {
                     <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>— Current month tracking: {monthLabel(currentMonth)} (in progress)</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', false))}
+                    {metricDefs.map(m => renderCard(m, currentMonthMetrics, 'current', true))}
                   </div>
                 </div>
               </div>
@@ -391,7 +419,7 @@ export default function Scorecard() {
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e1e0d9', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                       <th style={{ ...thS, minWidth: 220, position: 'sticky', left: 0, background: '#fff' }}>Metric</th>
-                      <th style={{ ...thS, minWidth: 80 }}>Target</th>
+                      <th style={{ ...thS, minWidth: 130 }}>Target</th>
                       {displayMonths.map(m => <th key={m} style={{ ...thS, textAlign: 'right', minWidth: 80 }}>{monthLabel(m)}</th>)}
                     </tr>
                   </thead>
@@ -399,7 +427,18 @@ export default function Scorecard() {
                     {metricDefs.map(md => (
                       <tr key={md.key} style={{ borderBottom: '0.5px solid #f0efec' }}>
                         <td style={{ ...tdS, position: 'sticky', left: 0, background: '#fff' }}>{md.label}{md.sub && <span style={{ fontSize: 10, color: '#bbb' }}> ({md.sub})</span>}</td>
-                        <td style={{ ...tdS, color: '#888' }}>{targetDisplay(md.targetKey)}</td>
+                        <td style={{ ...tdS, color: '#888' }}>
+                          {editingTarget === `table-${md.key}` ? (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <input type="text" value={editValue} onChange={e => setEditValue(e.target.value)} style={{ width: 70, fontSize: 12, padding: '2px 6px', border: '1px solid #d0d0cc', borderRadius: 4, fontFamily: 'inherit' }} autoFocus onKeyDown={e => { if (e.key === 'Enter') saveTarget(md.key, editValue, type); if (e.key === 'Escape') setEditingTarget(null) }} />
+                              <button onClick={() => saveTarget(md.key, editValue, type)} style={{ fontSize: 11, padding: '2px 6px', border: 'none', borderRadius: 4, background: '#1a1a19', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
+                            </div>
+                          ) : (
+                            <span style={{ cursor: 'pointer' }} onClick={() => { setEditingTarget(`table-${md.key}`); setEditValue(String(t[md.targetKey] || '')) }}>
+                              {targetDisplay(md.targetKey)} <span style={{ fontSize: 10 }}>✎</span>
+                            </span>
+                          )}
+                        </td>
                         {allMonthMetrics.map(mm => {
                           const val = mm[md.key]
                           const color = md.mode === 'binary' ? rag(val, t[md.targetKey], 'binary') : rag(val, t[md.targetKey])
