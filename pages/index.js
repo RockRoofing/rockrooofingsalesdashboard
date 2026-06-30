@@ -62,7 +62,8 @@ export default function Dashboard() {
   const [lastSync, setLastSync] = useState(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [filters, setFilters] = useState({ customerType: 'All', estimator: 'All', projectStage: 'All', salesPerson: 'All', leadSource: 'All', variation: 'All', status: 'All', region: 'All' })
+  const [filters, setFilters] = useState({ customerType: 'All', estimator: 'All', salesPerson: 'All', leadSource: 'All', status: 'All', region: 'All' })
+  const [globalStages, setGlobalStages] = useState([])
   const _now = new Date()
   const _twelveMonthsAgo = new Date(_now.getFullYear()-1, _now.getMonth(), _now.getDate())
   const _today = _now.toISOString().split('T')[0]
@@ -160,6 +161,7 @@ export default function Dashboard() {
     if (!matchFilter(d.leadSource, filters.leadSource)) return false
     if (!matchFilter(d.status, filters.status)) return false
     if (!matchFilter(d.region, filters.region)) return false
+    if (globalStages.length > 0 && !globalStages.includes(d.stageName)) return false
     return true
   })
 
